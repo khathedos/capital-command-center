@@ -15,14 +15,8 @@
   <meta name="apple-mobile-web-app-title" content="Capital Command">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
-  <!-- Icon (Platzhalter):
-       iOS Home Icon kommt idealerweise aus apple-touch-icon.png (180x180).
-       Wenn du es noch nicht hast, funktioniert es trotzdem, Safari nimmt dann oft ein Screenshot. -->
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
-
-  <!-- Optional: iOS Splash (echte Startup Images sind viele Größen; später möglich) -->
-  <!-- <link rel="apple-touch-startup-image" href="splash-1170x2532.png" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"> -->
 
   <style>
     :root{
@@ -69,6 +63,14 @@
     .pill.good{border-color: rgba(34,197,94,.35); background: rgba(34,197,94,.10)}
     .pill.warn{border-color: rgba(245,158,11,.35); background: rgba(245,158,11,.10)}
     .pill.bad{border-color: rgba(239,68,68,.35); background: rgba(239,68,68,.10)}
+    #accountSelect{
+      padding:6px 10px;
+      border-radius:999px;
+      background: rgba(13,21,36,.55);
+      border:1px solid rgba(255,255,255,.10);
+      color: var(--text);
+      font-weight:900;
+    }
     .grid{
       display:grid;
       grid-template-columns: 1.12fr .88fr;
@@ -115,6 +117,10 @@
       border:1px solid rgba(239,68,68,.45);
       color:#ffd6d6;
       font-weight:900;
+    }
+    button:disabled, input:disabled{
+      opacity:.55;
+      cursor:not-allowed;
     }
     .hr{height:1px;background: rgba(255,255,255,.07);margin:14px 0}
     .big{font-size:34px;font-weight:950;letter-spacing:.3px;margin:4px 0 0 0}
@@ -197,6 +203,16 @@
     <div class="sub">
       <span class="pill" id="pwaPill">PWA: checking…</span>
       <span class="pill good" id="statusPill">Status: OK</span>
+
+      <span class="pill">
+        Account:
+        <select id="accountSelect">
+          <option value="aggro">Aggro</option>
+          <option value="safe">Safe-Build</option>
+          <option value="total">Gesamt</option>
+        </select>
+      </span>
+
       <span class="pill" id="stagePill">Stage —</span>
       <span class="pill" id="streakPill">Streak: —</span>
     </div>
@@ -231,7 +247,7 @@
       <div class="two">
         <div>
           <div class="tiny">Aktueller Stand</div>
-          <div class="big" id="capitalBig">$39.00</div>
+          <div class="big" id="capitalBig">$0.00</div>
           <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
             <span class="pill" id="riskPill">Risk: —</span>
             <span class="pill" id="nextTargetPill">Next: —</span>
@@ -240,17 +256,17 @@
           <div class="kpis">
             <div class="kpi">
               <div class="t">Nächstes Ziel</div>
-              <div class="v" id="nextTargetKpi">$60</div>
-              <div class="tiny" id="toNextTiny">noch $21</div>
+              <div class="v" id="nextTargetKpi">$0</div>
+              <div class="tiny" id="toNextTiny">—</div>
             </div>
             <div class="kpi">
               <div class="t">50K Mission</div>
-              <div class="v" id="missionPctKpi">0.08%</div>
-              <div class="tiny" id="missionLeftTiny">rest $49,961</div>
+              <div class="v" id="missionPctKpi">0.00%</div>
+              <div class="tiny" id="missionLeftTiny">rest $50,000</div>
             </div>
             <div class="kpi">
               <div class="t">Max Tagesverlust</div>
-              <div class="v" id="dailyLossKpi">$12</div>
+              <div class="v" id="dailyLossKpi">$0</div>
               <div class="tiny">Kill-Switch respektieren</div>
             </div>
           </div>
@@ -275,7 +291,7 @@
 
       <div class="hr"></div>
 
-      <h2>Stage-Regeln (fixer Plan)</h2>
+      <h2 id="stageHeader">Stage-Regeln</h2>
       <div class="stageBox">
         <div>
           <div class="stageTitle" id="stageTitle">—</div>
@@ -293,11 +309,11 @@
 
           <div class="hr"></div>
           <div class="row" style="justify-content:flex-end">
-            <button class="secondary" id="exportBtn">Export JSON</button>
+            <button class="secondary" id="exportBtn">Export</button>
             <button class="secondary" id="importBtn">Import</button>
             <button class="danger" id="resetBtn">Reset</button>
           </div>
-          <div class="note tiny">Export ist dein Backup (iCloud/Files).</div>
+          <div class="note tiny" id="backupHint">Export ist dein Backup (iCloud/Files).</div>
         </div>
       </div>
     </div>
@@ -307,7 +323,7 @@
       <h2>Kapital-Verlauf</h2>
       <canvas id="chart" width="1000" height="520"></canvas>
       <div class="row" style="margin-top:10px;justify-content:space-between">
-        <div class="tiny" id="chartHint">Letzte 90 Einträge • lokal gespeichert</div>
+        <div class="tiny" id="chartHint">—</div>
         <div class="tiny" id="ddHint">Drawdown: —</div>
       </div>
 
@@ -322,6 +338,7 @@
               <th class="right">Kapital</th>
               <th class="right">Einzahlung</th>
               <th>Notiz</th>
+              <th id="accColHead" style="display:none">Account</th>
             </tr>
           </thead>
           <tbody id="logBody"></tbody>
@@ -331,128 +348,23 @@
       <div class="hr"></div>
 
       <h2>Extras</h2>
-      <div class="note">
-        ✅ Streak zählt Tage mit Eintrag<br/>
-        ✅ Warnungen bei Drawdown / Kill-Switch<br/>
-        ✅ Offline-Cache (wenn über https gehostet)<br/>
-        ➕ Als Nächstes: Zwei-Konten-Modus (Aggro + Build), Regel-Breach-Detector, Wochenquests
+      <div class="note" id="extrasNote">
+        ✅ Aggro / Safe getrennte Konten (Kapital, Einzahlungen, Journal, Chart)<br/>
+        ✅ Gesamt = nur Anzeige (kombiniert), kein Speichern<br/>
+        ✅ Warnungen bei Drawdown / Kill-Switch pro Account<br/>
       </div>
     </div>
   </div>
 </div>
 
 <script>
-  // --------------------------
-  // DATA + STAGES
-  // --------------------------
-  const STORAGE_KEY = "ccc_entries_v3";
-  const STORAGE_META = "ccc_meta_v3";
-  const MISSION_TARGET = 50000;
+  // ==========================
+  // ACCOUNTS + STORAGE
+  // ==========================
+  const ACTIVE_ACCOUNT_KEY = "ccc_active_account_v2";
+  const BASE_KEY = "ccc_entries_v4";
   const MAX_ENTRIES = 90;
-
-  const stages = [
-    {
-      id: 0,
-      name: "Stage 0 – Controlled Explosion",
-      min: 0, max: 59.999, next: 60,
-      riskLabel: "Risk: Seed",
-      dailyMaxLoss: 12,
-      tags: [
-        {text: "Bot: 30$ | 10x", type:"good"},
-        {text: "SL 6–8% | TP 18–22%", type:"warn"},
-        {text: "Kill: <25$ STOP", type:"bad"},
-      ],
-      rules:
-`Ziel: 39$ → 60$
-• 1 Position gleichzeitig
-• Hebel ≤ 10x (nie erhöhen)
-• Max 2 Verlustzyklen
-• Unter 25$ sofort STOP (kein Nachschießen)`
-    },
-    {
-      id: 1,
-      name: "Stage 1 – Stabilization Mode",
-      min: 60, max: 99.999, next: 100,
-      riskLabel: "Risk: Stabilize",
-      dailyMaxLoss: 10,
-      tags: [
-        {text: "Aktiv: 40$ | Gesichert: 20$", type:"good"},
-        {text: "Hebel 8x", type:"warn"},
-        {text: "Kein Reset zulassen", type:"bad"},
-      ],
-      rules:
-`Ziel: 60$ → 100$
-• Risiko runter, Gewinne halten
-• Hebel ~8x
-• Wenn Rückfall <52$ → Pause & Review`
-    },
-    {
-      id: 2,
-      name: "Stage 2 – Controlled Growth",
-      min: 100, max: 149.999, next: 150,
-      riskLabel: "Risk: Controlled",
-      dailyMaxLoss: 12,
-      tags: [
-        {text: "Aktiv: 60$ | Gesichert: 40$", type:"good"},
-        {text: "SL 5–6% | TP 15–18%", type:"warn"},
-        {text: "Keine YOLO-Trades", type:"bad"},
-      ],
-      rules:
-`Ziel: 100$ → 150$
-• Stabil wachsen, kein Overtrade
-• Keine Hebel-Experimente
-• Max 1–2 Trades parallel`
-    },
-    {
-      id: 3,
-      name: "Stage 3 – Capital Expansion",
-      min: 150, max: 299.999, next: 300,
-      riskLabel: "Risk: Build",
-      dailyMaxLoss: 15,
-      tags: [
-        {text: "Jetzt 100€ Nachschub → ~250$", type:"good"},
-        {text: "Futures 6–8x + Spot Swing", type:"warn"},
-        {text: "Reserve halten", type:"bad"},
-      ],
-      rules:
-`Ziel: 150$ → 300$
-• Ab hier Mix (Trend + Swing + Reserve)
-• Fokus: Überleben + Skalierung`
-    },
-    {
-      id: 4,
-      name: "Stage 4 – Professional Scaling",
-      min: 300, max: 999.999, next: 1000,
-      riskLabel: "Risk: Pro",
-      dailyMaxLoss: 20,
-      tags: [
-        {text: "Max 5% Risiko/Trade", type:"good"},
-        {text: "Hebel konservativ", type:"warn"},
-        {text: "Keine Gier-Rückfälle", type:"bad"},
-      ],
-      rules:
-`Ziel: 300$ → 1000$
-• Konsistenz > Sensation
-• Risiko deckeln, Gewinne sichern`
-    },
-    {
-      id: 5,
-      name: "Stage 5 – 50K Mission Activated",
-      min: 1000, max: Infinity, next: MISSION_TARGET,
-      riskLabel: "Risk: Mission",
-      dailyMaxLoss: 30,
-      tags: [
-        {text: "1–3% Risiko/Trade", type:"good"},
-        {text: "Monatlich 15–25% realistisch", type:"warn"},
-        {text: "Kapital schützen > alles", type:"bad"},
-      ],
-      rules:
-`Ziel: 1.000$ → 50.000$
-• Business-Modus
-• Review, Prozesse, Schutz
-• Skalierung über Zeit`
-    }
-  ];
+  const MISSION_TARGET = 50000;
 
   const $ = (id)=>document.getElementById(id);
   const clamp = (x,a,b)=>Math.max(a,Math.min(b,x));
@@ -465,23 +377,294 @@
     return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
-  function loadEntries(){
-    try{ return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); }
-    catch{ return []; }
+  function getActiveAccount(){
+    return localStorage.getItem(ACTIVE_ACCOUNT_KEY) || "aggro";
   }
-  function saveEntries(arr){
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(arr.slice(-MAX_ENTRIES)));
-  }
-  function loadMeta(){
-    try{ return JSON.parse(localStorage.getItem(STORAGE_META) || "{}"); }
-    catch{ return {}; }
-  }
-  function saveMeta(m){
-    localStorage.setItem(STORAGE_META, JSON.stringify(m));
+  function setActiveAccount(id){
+    localStorage.setItem(ACTIVE_ACCOUNT_KEY, id);
   }
 
-  function getStage(cap){
-    return stages.find(s=>cap>=s.min && cap<=s.max) || stages[0];
+  function storageKey(account){
+    if(account === "aggro") return BASE_KEY + "__aggro";
+    if(account === "safe")  return BASE_KEY + "__safe";
+    // total has no storage (read-only)
+    return BASE_KEY + "__aggro";
+  }
+
+  function loadEntries(account){
+    try { return JSON.parse(localStorage.getItem(storageKey(account)) || "[]"); }
+    catch { return []; }
+  }
+
+  function saveEntries(account, arr){
+    localStorage.setItem(storageKey(account), JSON.stringify(arr.slice(-MAX_ENTRIES)));
+  }
+
+  function mergedTotalEntries(){
+    const a = loadEntries("aggro").map(e=>({...e, _acc:"Aggro"}));
+    const s = loadEntries("safe").map(e=>({...e, _acc:"Safe"}));
+    return [...a, ...s].sort((x,y)=>String(x.ts||"").localeCompare(String(y.ts||"")));
+  }
+
+  function lastCapital(entries, fallback=0){
+    if(!entries.length) return fallback;
+    const v = Number(entries[entries.length-1].capital);
+    return isFinite(v) ? v : fallback;
+  }
+
+  // ==========================
+  // STAGES (separiert)
+  // ==========================
+  // Aggro Stages: schneller, riskanter (wie dein Seed-Plan)
+  const stagesAggro = [
+    {
+      id: "A0",
+      name: "Aggro A0 – Controlled Explosion",
+      min: 0, max: 59.999, next: 60,
+      riskLabel: "Risk: Seed",
+      dailyMaxLoss: 12,
+      tags: [
+        {text: "Bot: 30$ | 10x", type:"good"},
+        {text: "SL 6–8% | TP 18–22%", type:"warn"},
+        {text: "Kill: <25$ STOP", type:"bad"},
+      ],
+      rules:
+`TRADING (Aggro Template)
+• Max 1 Position gleichzeitig
+• Hebel ≤ 10x (nicht erhöhen)
+• Stop-Loss 6–8% (immer gesetzt)
+• Take-Profit 18–22%
+• Max 2 Verlustzyklen/Tag → Pause
+
+STAGE-ZIEL
+• ${fmt0(39)} → ${fmt0(60)}
+• Unter ${fmt0(25)} = STOP (kein Nachschießen)`
+    },
+    {
+      id: "A1",
+      name: "Aggro A1 – Stabilization Mode",
+      min: 60, max: 99.999, next: 100,
+      riskLabel: "Risk: Stabilize",
+      dailyMaxLoss: 10,
+      tags: [
+        {text: "Aktiv: 40$ | Gesichert: 20$", type:"good"},
+        {text: "Hebel ~8x", type:"warn"},
+        {text: "Wenn <52$ → Pause", type:"bad"},
+      ],
+      rules:
+`TRADING (Aggro, etwas ruhiger)
+• Hebel ~8x
+• SL 5–7% | TP 15–18%
+• Keine Revenge-Trades
+
+STAGE-ZIEL
+• ${fmt0(60)} → ${fmt0(100)}
+• Wenn Rückfall < ${fmt0(52)} → 24h Pause & Review`
+    },
+    {
+      id: "A2",
+      name: "Aggro A2 – Controlled Growth",
+      min: 100, max: 149.999, next: 150,
+      riskLabel: "Risk: Controlled",
+      dailyMaxLoss: 12,
+      tags: [
+        {text: "Aktiv: 60$ | Gesichert: 40$", type:"good"},
+        {text: "SL 5–6% | TP 15–18%", type:"warn"},
+        {text: "Keine YOLO-Trades", type:"bad"},
+      ],
+      rules:
+`TRADING
+• Konsistenz > Sensation
+• Max 1–2 Trades/Tag, wenn Setup sauber
+• Kein Martingale / kein Nachkaufen
+
+STAGE-ZIEL
+• ${fmt0(100)} → ${fmt0(150)}`
+    },
+    {
+      id: "A3",
+      name: "Aggro A3 – Capital Expansion",
+      min: 150, max: 299.999, next: 300,
+      riskLabel: "Risk: Build",
+      dailyMaxLoss: 15,
+      tags: [
+        {text: "Mix Trend + Reserve", type:"good"},
+        {text: "Hebel 6–8x", type:"warn"},
+        {text: "Reserve halten", type:"bad"},
+      ],
+      rules:
+`TRADING
+• Mix: Trendbot + kleine Reserve
+• Hebel 6–8x
+• Gewinne teilweise sichern
+
+STAGE-ZIEL
+• ${fmt0(150)} → ${fmt0(300)}`
+    },
+    {
+      id: "A4",
+      name: "Aggro A4 – Professional Scaling",
+      min: 300, max: 999.999, next: 1000,
+      riskLabel: "Risk: Pro",
+      dailyMaxLoss: 20,
+      tags: [
+        {text: "Max ~5% Risiko/Trade", type:"good"},
+        {text: "Hebel konservativ", type:"warn"},
+        {text: "Keine Gier-Rückfälle", type:"bad"},
+      ],
+      rules:
+`TRADING
+• Prozess > Gefühl
+• Risiko pro Trade deckeln
+• Gewinne sichern
+
+STAGE-ZIEL
+• ${fmt0(300)} → ${fmt0(1000)}`
+    },
+    {
+      id: "A5",
+      name: "Aggro A5 – Mission Activated",
+      min: 1000, max: Infinity, next: MISSION_TARGET,
+      riskLabel: "Risk: Mission",
+      dailyMaxLoss: 30,
+      tags: [
+        {text: "1–3% Risiko/Trade", type:"good"},
+        {text: "Monatlich 15–25% (realistisch)", type:"warn"},
+        {text: "Kapital schützen", type:"bad"},
+      ],
+      rules:
+`TRADING
+• Business-Modus
+• Reviews, Regeln, Schutz
+
+MISSION
+• ${fmt0(1000)} → ${fmt0(MISSION_TARGET)}`
+    }
+  ];
+
+  // Safe-Build Stages: weniger Hebel, mehr Schutz
+  const stagesSafe = [
+    {
+      id: "S0",
+      name: "Safe S0 – Stabil & Schutz",
+      min: 0, max: 149.999, next: 150,
+      riskLabel: "Risk: Stable",
+      dailyMaxLoss: 8,
+      tags: [
+        {text: "Hebel 2–5x (oder Spot/Grid)", type:"good"},
+        {text: "SL 3–5% | TP 8–12%", type:"warn"},
+        {text: "Keine Revenge Trades", type:"bad"},
+      ],
+      rules:
+`TRADING (Safe-Build Template)
+• Hebel 2–5x (nicht höher)
+• Stop-Loss 3–5% (immer)
+• Take-Profit 8–12%
+• Max 3 Trades/Tag (wenn Bot viel feuert → runterregeln)
+• Nach Verlustserie → 24h Pause
+
+STAGE-ZIEL
+• Start ${fmt0(100)} → ${fmt0(150)}`
+    },
+    {
+      id: "S1",
+      name: "Safe S1 – Build",
+      min: 150, max: 249.999, next: 250,
+      riskLabel: "Risk: Build",
+      dailyMaxLoss: 10,
+      tags: [
+        {text: "Hebel 2–5x", type:"good"},
+        {text: "TP kleiner, öfter sichern", type:"warn"},
+        {text: "Wenn <130$ → Pause", type:"bad"},
+      ],
+      rules:
+`TRADING
+• Gewinne regelmäßig sichern
+• Kein Überhebeln
+• Wenn Rückfall unter ${fmt0(130)} → Pause & Review
+
+STAGE-ZIEL
+• ${fmt0(150)} → ${fmt0(250)}`
+    },
+    {
+      id: "S2",
+      name: "Safe S2 – Grow",
+      min: 250, max: 499.999, next: 500,
+      riskLabel: "Risk: Grow",
+      dailyMaxLoss: 12,
+      tags: [
+        {text: "Konstanz > Hype", type:"good"},
+        {text: "SL 3–5% | TP 8–12%", type:"warn"},
+        {text: "Drawdown klein halten", type:"bad"},
+      ],
+      rules:
+`TRADING
+• Konstanz
+• Saubere Signale, wenig Overtrade
+
+STAGE-ZIEL
+• ${fmt0(250)} → ${fmt0(500)}`
+    },
+    {
+      id: "S3",
+      name: "Safe S3 – Scale",
+      min: 500, max: 999.999, next: 1000,
+      riskLabel: "Risk: Scale",
+      dailyMaxLoss: 15,
+      tags: [
+        {text: "Risiko weiter senken", type:"good"},
+        {text: "Gewinne sichern", type:"warn"},
+        {text: "Kapital schützen", type:"bad"},
+      ],
+      rules:
+`TRADING
+• Risiko senken, Gewinn sichern
+• Nicht gierig werden
+
+STAGE-ZIEL
+• ${fmt0(500)} → ${fmt0(1000)}`
+    },
+    {
+      id: "S4",
+      name: "Safe S4 – Mission Prep",
+      min: 1000, max: Infinity, next: MISSION_TARGET,
+      riskLabel: "Risk: Mission",
+      dailyMaxLoss: 20,
+      tags: [
+        {text: "1–3% Risiko/Trade", type:"good"},
+        {text: "Prozess & Review", type:"warn"},
+        {text: "Schutz > alles", type:"bad"},
+      ],
+      rules:
+`TRADING
+• Business-Modus
+• Prozess, Review, Schutz
+
+MISSION
+• ${fmt0(1000)} → ${fmt0(MISSION_TARGET)}`
+    }
+  ];
+
+  // Gesamt: Motivierende Hauptstages (nur Anzeige)
+  const totalMilestones = [
+    { id:"G0", name:"Gesamt G0 – Start", next: 100, note:"Stabiler Boden. Disziplin schlägt Tempo." },
+    { id:"G1", name:"Gesamt G1 – Momentum", next: 300, note:"Prozess sitzt. Keine dummen Fehler." },
+    { id:"G2", name:"Gesamt G2 – Scale", next: 1000, note:"Ab hier: Konsistenz > Sensation." },
+    { id:"G3", name:"Gesamt G3 – Professional", next: 5000, note:"Kapital arbeitet, du schützt." },
+    { id:"G4", name:"Gesamt G4 – Machine", next: 10000, note:"System läuft. Review & Risk only." },
+    { id:"G5", name:"Gesamt G5 – Mission", next: MISSION_TARGET, note:"50K Mission: Prozess, Schutz, Geduld." },
+  ];
+
+  function getStageFor(account, cap){
+    const list = account === "aggro" ? stagesAggro : stagesSafe;
+    return list.find(s => cap>=s.min && cap<=s.max) || list[0];
+  }
+
+  function getTotalStage(totalCap){
+    for(const m of totalMilestones){
+      if(totalCap < m.next) return m;
+    }
+    return totalMilestones[totalMilestones.length-1];
   }
 
   function computePeakDD(entries){
@@ -495,9 +678,7 @@
   }
 
   function computeStreak(entries){
-    // streak = consecutive calendar days with at least one entry
-    // simple approach: compare YYYY-MM-DD
-    const days = [...new Set(entries.map(e=>e.ts.slice(0,10)))].sort();
+    const days = [...new Set(entries.map(e=>String(e.ts||"").slice(0,10)))].sort();
     if(days.length === 0) return 0;
     let streak = 1;
     for(let i=days.length-1; i>0; i--){
@@ -510,30 +691,78 @@
     return streak;
   }
 
-  // --------------------------
-  // UI RENDER
-  // --------------------------
-  function render(){
-    const entries = loadEntries();
-    const cur = entries.length ? entries[entries.length-1].capital : 39;
-    $("capitalInput").value = cur;
+  // ==========================
+  // RENDER
+  // ==========================
+  function esc(s){
+    return String(s||"").replace(/[&<>"']/g, m=>({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+    }[m]));
+  }
 
-    const stage = getStage(cur);
+  function setInputsEnabled(enabled){
+    $("capitalInput").disabled = !enabled;
+    $("depositInput").disabled = !enabled;
+    $("noteInput").disabled = !enabled;
+    $("saveBtn").disabled = !enabled;
+  }
+
+  function render(){
+    const account = getActiveAccount();
+
+    // entries + current capital
+    let entries;
+    let cur;
+
+    if(account === "total"){
+      entries = mergedTotalEntries();
+      const a = lastCapital(loadEntries("aggro"), 0);
+      const s = lastCapital(loadEntries("safe"), 0);
+      cur = a + s;
+      setInputsEnabled(false);
+      $("capitalInput").value = ""; // read-only, nichts eintragen
+      $("depositInput").value = "";
+      $("noteInput").value = "";
+      $("stageHeader").textContent = "Hauptstages (Gesamt-Mission)";
+      $("backupHint").textContent = "Gesamt ist nur Anzeige. Export enthält beide Accounts.";
+      $("accColHead").style.display = "";
+    } else {
+      entries = loadEntries(account);
+      cur = entries.length ? Number(entries[entries.length-1].capital) : (account === "aggro" ? 39 : 100);
+      setInputsEnabled(true);
+      $("capitalInput").value = entries.length ? cur : ""; // leer lassen, wenn noch keine Einträge
+      $("stageHeader").textContent = "Stage-Regeln (Account-spezifisch)";
+      $("backupHint").textContent = "Export ist dein Backup (iCloud/Files).";
+      $("accColHead").style.display = "none";
+    }
+
+    // Header pill: stage + risk + next
     $("capitalBig").textContent = fmt(cur);
 
-    $("stagePill").textContent = `Stage ${stage.id}`;
-    $("riskPill").textContent = stage.riskLabel;
-    $("nextTargetPill").textContent = `Next: ${fmt0(stage.next)}`;
+    let stageObj;
+    if(account === "total"){
+      stageObj = getTotalStage(cur);
+      $("stagePill").textContent = stageObj.id;
+      $("riskPill").textContent = "Risk: Gesamt";
+      $("nextTargetPill").textContent = `Next: ${fmt0(stageObj.next)}`;
+      $("dailyLossKpi").textContent = "—";
+    } else {
+      stageObj = getStageFor(account, cur);
+      $("stagePill").textContent = stageObj.id;
+      $("riskPill").textContent = stageObj.riskLabel;
+      $("nextTargetPill").textContent = `Next: ${fmt0(stageObj.next)}`;
+      $("dailyLossKpi").textContent = fmt0(stageObj.dailyMaxLoss);
+    }
 
-    $("dailyLossKpi").textContent = fmt0(stage.dailyMaxLoss);
-    $("nextTargetKpi").textContent = fmt0(stage.next);
+    // KPIs
+    $("nextTargetKpi").textContent = fmt0(stageObj.next);
 
-    const toNext = Math.max(0, stage.next - cur);
+    const toNext = Math.max(0, stageObj.next - cur);
     $("toNextTiny").textContent = toNext>0 ? `noch ${fmt0(toNext)}` : "Ziel erreicht ✅";
 
-    const nextPct = clamp((cur / stage.next) * 100, 0, 100);
+    const nextPct = clamp((cur / stageObj.next) * 100, 0, 100);
     $("nextBar").style.width = nextPct + "%";
-    $("nextBarLabel").textContent = `${nextPct.toFixed(1)}% bis ${fmt0(stage.next)}`;
+    $("nextBarLabel").textContent = `${nextPct.toFixed(1)}% bis ${fmt0(stageObj.next)}`;
 
     const missionPct = clamp((cur / MISSION_TARGET) * 100, 0, 100);
     $("missionPctKpi").textContent = `${missionPct.toFixed(2)}%`;
@@ -541,84 +770,158 @@
     $("missionBarLabel").textContent = `${missionPct.toFixed(3)}% von ${fmt0(MISSION_TARGET)}`;
     $("missionLeftTiny").textContent = `rest ${fmt0(Math.max(0, MISSION_TARGET - cur))}`;
 
-    $("stageTitle").textContent = stage.name;
-    $("stageRules").textContent = stage.rules;
+    // Stage rules panel
+    if(account === "total"){
+      $("stageTitle").textContent = stageObj.name;
+      $("stageRules").textContent =
+`MOTIVATION / HAUPTSTAGES (Gesamt)
+• Nächstes Ziel: ${fmt0(stageObj.next)}
+• Fokus: Disziplin + Prozess + Schutz
 
-    // tags
-    const tags = stage.tags;
-    $("tag1").textContent = tags[0].text; $("tag1").className = "tag " + tags[0].type;
-    $("tag2").textContent = tags[1].text; $("tag2").className = "tag " + tags[1].type;
-    $("tag3").textContent = tags[2].text; $("tag3").className = "tag " + tags[2].type;
+${stageObj.note}
 
-    $("triggerText").textContent =
-      stage.id < 5 ? `${fmt0(stage.next)} → Stage ${stage.id+1}` : `${fmt0(MISSION_TARGET)} → Mission`;
-    $("triggerNote").textContent =
-      stage.id === 0 ? "Unter 25$ STOP. Kein Nachschießen."
-      : stage.id === 1 ? "Hebel runter. Gewinne nicht zurückgeben."
-      : stage.id === 2 ? "Kontrolliertes Wachstum."
-      : stage.id === 3 ? "Mix + Reserve."
-      : stage.id === 4 ? "Prozess > Gefühl."
-      : "Business Mode.";
+REGEL (immer)
+• Wenn ein Account KILL triggert → beide pausieren & Review`;
+      $("tag1").textContent = "Aggro + Safe";
+      $("tag1").className = "tag good";
+      $("tag2").textContent = "Gesamt = Anzeige";
+      $("tag2").className = "tag warn";
+      $("tag3").textContent = "Schutz > Tempo";
+      $("tag3").className = "tag bad";
+      $("triggerText").textContent = `${fmt0(stageObj.next)} → nächster Meilenstein`;
+      $("triggerNote").textContent = stageObj.note;
+    } else {
+      $("stageTitle").textContent = stageObj.name;
+      $("stageRules").textContent = stageObj.rules;
 
-    // Drawdown + Kill switches
-    const dd = computePeakDD(entries);
-    $("ddHint").textContent = `Drawdown: −${dd.ddPct.toFixed(1)}% (Peak ${fmt(dd.peak)})`;
+      // tags
+      const tags = stageObj.tags;
+      $("tag1").textContent = tags[0].text; $("tag1").className = "tag " + tags[0].type;
+      $("tag2").textContent = tags[1].text; $("tag2").className = "tag " + tags[1].type;
+      $("tag3").textContent = tags[2].text; $("tag3").className = "tag " + tags[2].type;
 
+      $("triggerText").textContent = `${fmt0(stageObj.next)} → next stage`;
+      $("triggerNote").textContent =
+        account === "aggro"
+          ? "Aggro: schnell, aber Regeln hart. Nach 2 Losses Pause."
+          : "Safe: Schutz zuerst. Kein Overtrade.";
+    }
+
+    // Alerts (Kill / Drawdown) — pro Account, bei Gesamt: worst-of
     const alert = $("alertBox");
     alert.className = "alert";
     alert.innerHTML = "";
+    $("nextBar").className = "fill-ok";
 
-    const kill = (stage.id === 0 && cur < 25) || (stage.id === 1 && cur < 52);
-    const severe = dd.ddPct >= 25 && entries.length >= 4;
-
-    if(kill){
-      alert.className = "alert show bad";
-      alert.innerHTML = `<b>🛑 KILL SWITCH</b><br/>Kapital unter kritischem Level. Bot pausieren. 24h Pause.`;
-      $("statusPill").className = "pill bad";
-      $("statusPill").textContent = "Status: STOP";
-      $("nextBar").className = "fill-warn";
-    } else if(severe){
-      alert.className = "alert show warn";
-      alert.innerHTML = `<b>⚠️ Drawdown Warnung</b><br/>Peak ${fmt(dd.peak)} → jetzt ${fmt(cur)} (−${dd.ddPct.toFixed(1)}%). Risiko reduzieren / pausieren.`;
-      $("statusPill").className = "pill warn";
-      $("statusPill").textContent = "Status: Vorsicht";
-      $("nextBar").className = "fill-warn";
-    } else {
-      $("statusPill").className = "pill good";
-      $("statusPill").textContent = "Status: OK";
-      $("nextBar").className = "fill-ok";
+    function evaluateKillAndDD(ent, cap, stage){
+      const dd = computePeakDD(ent);
+      return { dd, cap, stage };
     }
 
-    // streak
-    const streak = computeStreak(entries);
-    $("streakPill").textContent = `Streak: ${streak}d`;
+    if(account === "total"){
+      const entA = loadEntries("aggro");
+      const entS = loadEntries("safe");
+      const capA = lastCapital(entA, 0);
+      const capS = lastCapital(entS, 0);
 
-    // table + chart
-    renderLog(entries);
+      const stA = getStageFor("aggro", capA);
+      const stS = getStageFor("safe", capS);
+
+      const evA = evaluateKillAndDD(entA, capA, stA);
+      const evS = evaluateKillAndDD(entS, capS, stS);
+
+      const killA = (stA.id === "A0" && capA < 25) || (stA.id === "A1" && capA < 52);
+      const killS = (stS.id === "S0" && capS < 80) || (stS.id === "S1" && capS < 130);
+
+      const severeA = evA.dd.ddPct >= 25 && entA.length >= 4;
+      const severeS = evS.dd.ddPct >= 12 && entS.length >= 4; // Safe ist sensibler
+
+      if(killA || killS){
+        alert.className = "alert show bad";
+        alert.innerHTML = `<b>🛑 KILL SWITCH (Gesamt)</b><br/>Mindestens ein Account unter kritischem Level. Beide pausieren. Review.`;
+        $("statusPill").className = "pill bad";
+        $("statusPill").textContent = "Status: STOP";
+        $("nextBar").className = "fill-warn";
+      } else if(severeA || severeS){
+        alert.className = "alert show warn";
+        alert.innerHTML = `<b>⚠️ Drawdown Warnung (Gesamt)</b><br/>Mindestens ein Account mit starkem Drawdown. Risiko runter / Pause.`;
+        $("statusPill").className = "pill warn";
+        $("statusPill").textContent = "Status: Vorsicht";
+        $("nextBar").className = "fill-warn";
+      } else {
+        $("statusPill").className = "pill good";
+        $("statusPill").textContent = "Status: OK";
+      }
+
+      // dd hint: show both
+      const ddA = evA.dd;
+      const ddS = evS.dd;
+      $("ddHint").textContent = `DD Aggro −${ddA.ddPct.toFixed(1)}% (Peak ${fmt(ddA.peak)}) • DD Safe −${ddS.ddPct.toFixed(1)}% (Peak ${fmt(ddS.peak)})`;
+
+      // streak total = max of both (motivational)
+      const streak = Math.max(computeStreak(entA), computeStreak(entS));
+      $("streakPill").textContent = `Streak: ${streak}d`;
+    } else {
+      const dd = computePeakDD(entries);
+      $("ddHint").textContent = `Drawdown: −${dd.ddPct.toFixed(1)}% (Peak ${fmt(dd.peak)})`;
+
+      const kill =
+        (account === "aggro" && ((stageObj.id === "A0" && cur < 25) || (stageObj.id === "A1" && cur < 52))) ||
+        (account === "safe"  && ((stageObj.id === "S0" && cur < 80) || (stageObj.id === "S1" && cur < 130)));
+
+      const severe =
+        (account === "aggro" && dd.ddPct >= 25 && entries.length >= 4) ||
+        (account === "safe"  && dd.ddPct >= 12 && entries.length >= 4);
+
+      if(kill){
+        alert.className = "alert show bad";
+        alert.innerHTML = `<b>🛑 KILL SWITCH</b><br/>${account === "aggro" ? "Aggro" : "Safe"} unter kritischem Level. Bot pausieren. 24h Pause.`;
+        $("statusPill").className = "pill bad";
+        $("statusPill").textContent = "Status: STOP";
+        $("nextBar").className = "fill-warn";
+      } else if(severe){
+        alert.className = "alert show warn";
+        alert.innerHTML = `<b>⚠️ Drawdown Warnung</b><br/>Peak ${fmt(dd.peak)} → jetzt ${fmt(cur)} (−${dd.ddPct.toFixed(1)}%). Risiko reduzieren / pausieren.`;
+        $("statusPill").className = "pill warn";
+        $("statusPill").textContent = "Status: Vorsicht";
+        $("nextBar").className = "fill-warn";
+      } else {
+        $("statusPill").className = "pill good";
+        $("statusPill").textContent = "Status: OK";
+      }
+
+      const streak = computeStreak(entries);
+      $("streakPill").textContent = `Streak: ${streak}d`;
+    }
+
+    // Right side: log + chart
+    renderLog(account, entries);
     renderChart(entries);
+
+    // extras hint
+    $("chartHint").textContent =
+      account === "total"
+        ? `Gesamtansicht • Aggro+Safe kombiniert • lokal gespeichert`
+        : `${account === "aggro" ? "Aggro" : "Safe-Build"} • Letzte ${Math.min(entries.length, MAX_ENTRIES)} Einträge • lokal gespeichert`;
   }
 
-  function esc(s){
-    return String(s||"").replace(/[&<>"']/g, m=>({
-      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
-    }[m]));
-  }
-
-  function renderLog(entries){
+  function renderLog(account, entries){
     const body = $("logBody");
     body.innerHTML = "";
+
     const rows = entries.slice().reverse().slice(0, 14);
     for(const e of rows){
       const tr = document.createElement("tr");
+      const accTd = account === "total" ? `<td>${esc(e._acc || "")}</td>` : "";
       tr.innerHTML = `
         <td>${esc(e.ts)}</td>
         <td class="right"><b>${fmt(e.capital)}</b></td>
         <td class="right">${e.deposit ? fmt(e.deposit) : "—"}</td>
         <td>${esc(e.note || "")}</td>
+        ${accTd}
       `;
       body.appendChild(tr);
     }
-    $("chartHint").textContent = `Letzte ${Math.min(entries.length, MAX_ENTRIES)} Einträge • lokal gespeichert`;
   }
 
   function renderChart(entries){
@@ -651,7 +954,7 @@
       return;
     }
 
-    const vals = entries.map(e=>e.capital);
+    const vals = entries.map(e=>Number(e.capital)||0);
     let minV = Math.min(...vals);
     let maxV = Math.max(...vals);
     if(minV === maxV){ minV*=0.95; maxV*=1.05; }
@@ -673,9 +976,10 @@
     // points
     const n = entries.length;
     const pts = entries.map((e,i)=>{
+      const v = Number(e.capital)||0;
       const x = pad.l + plotW*(i/(n-1));
-      const y = pad.t + plotH*(1-((e.capital-minV)/range));
-      return {x,y,v:e.capital};
+      const y = pad.t + plotH*(1-((v-minV)/range));
+      return {x,y,v};
     });
 
     const grad = ctx.createLinearGradient(pad.l,pad.t,W-pad.r,pad.t);
@@ -698,34 +1002,52 @@
     ctx.fillText(fmt(last.v), last.x-40, last.y-11);
   }
 
-  // --------------------------
+  // ==========================
   // ACTIONS
-  // --------------------------
+  // ==========================
   function saveEntry(){
+    const account = getActiveAccount();
+    if(account === "total"){
+      alert("Gesamt ist nur Anzeige. Bitte Aggro oder Safe-Build wählen.");
+      return;
+    }
     const cap = Number($("capitalInput").value);
     if(!isFinite(cap) || cap <= 0){ alert("Bitte gültiges Kapital eingeben."); return; }
+
     const dep = Number($("depositInput").value || 0);
     const note = ($("noteInput").value || "").trim();
 
-    const entries = loadEntries();
+    const entries = loadEntries(account);
     entries.push({ ts: nowStamp(), capital: cap, deposit: isFinite(dep)?dep:0, note });
-    saveEntries(entries);
+    saveEntries(account, entries);
 
     $("depositInput").value = "";
     $("noteInput").value = "";
     render();
   }
 
+  // Export: je nach Account
+  // - Aggro/Safe: export nur dieses Konto
+  // - Gesamt: export beide Konten zusammen
   function exportJSON(){
-    const entries = loadEntries();
-    const blob = new Blob([JSON.stringify({entries}, null, 2)], {type:"application/json"});
+    const account = getActiveAccount();
+    const payload =
+      account === "total"
+        ? { aggro: loadEntries("aggro"), safe: loadEntries("safe") }
+        : { [account]: loadEntries(account) };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {type:"application/json"});
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "ccc-backup.json";
+    a.download = account === "total" ? "ccc-backup-all.json" : `ccc-backup-${account}.json`;
     a.click();
     URL.revokeObjectURL(a.href);
   }
 
+  // Import:
+  // - wenn JSON {aggro:[...], safe:[...]} -> import beide
+  // - wenn JSON {aggro:[...]} -> import aggro
+  // - wenn JSON {safe:[...]}  -> import safe
   function importJSON(){
     const inp = document.createElement("input");
     inp.type = "file";
@@ -737,12 +1059,24 @@
       r.onload = ()=>{
         try{
           const data = JSON.parse(r.result);
-          if(data.entries && Array.isArray(data.entries)){
-            saveEntries(data.entries);
-            render();
-          } else {
-            alert("JSON hat kein 'entries' Array.");
+
+          const hasAggro = data && Array.isArray(data.aggro);
+          const hasSafe  = data && Array.isArray(data.safe);
+
+          if(hasAggro) saveEntries("aggro", data.aggro);
+          if(hasSafe)  saveEntries("safe", data.safe);
+
+          // single-account import
+          if(!hasAggro && !hasSafe){
+            if(Array.isArray(data.aggro)) saveEntries("aggro", data.aggro);
+            else if(Array.isArray(data.safe)) saveEntries("safe", data.safe);
+            else {
+              alert("Import-JSON nicht erkannt. Erwartet: {aggro:[...], safe:[...]} oder {aggro:[...]} oder {safe:[...]}");
+              return;
+            }
           }
+
+          render();
         }catch(e){
           alert("Import fehlgeschlagen.");
         }
@@ -753,14 +1087,22 @@
   }
 
   function resetAll(){
-    if(!confirm("Wirklich resetten?")) return;
-    localStorage.removeItem(STORAGE_KEY);
+    const account = getActiveAccount();
+    if(account === "total"){
+      if(!confirm("Gesamt resetten = Aggro + Safe löschen. Wirklich?")) return;
+      localStorage.removeItem(storageKey("aggro"));
+      localStorage.removeItem(storageKey("safe"));
+      render();
+      return;
+    }
+    if(!confirm(`Wirklich ${account === "aggro" ? "Aggro" : "Safe-Build"} resetten?`)) return;
+    localStorage.removeItem(storageKey(account));
     render();
   }
 
-  // --------------------------
-  // PWA: Service Worker (nur https / localhost)
-  // --------------------------
+  // ==========================
+  // PWA: Service Worker
+  // ==========================
   async function setupPWA(){
     const pill = $("pwaPill");
     const isSecure = location.protocol === "https:" || location.hostname === "localhost";
@@ -784,13 +1126,21 @@
     }
   }
 
-  // events
+  // ==========================
+  // EVENTS + BOOT
+  // ==========================
   $("saveBtn").addEventListener("click", saveEntry);
   $("exportBtn").addEventListener("click", exportJSON);
   $("importBtn").addEventListener("click", importJSON);
   $("resetBtn").addEventListener("click", resetAll);
 
-  // boot
+  $("accountSelect").addEventListener("change", (e)=>{
+    setActiveAccount(e.target.value);
+    render();
+  });
+
+  // initialize select + render
+  $("accountSelect").value = getActiveAccount();
   render();
   setupPWA();
 </script>
@@ -800,17 +1150,14 @@
   (function(){
     var plugins = [
       "./plugins/safearea.js",
-      "./plugins/rules.js",
-      "./plugins/two-accounts.js",
-      // später einfach erweitern:
-      // "./plugins/two-accounts.js",
-      // "./plugins/weekly.js",
-      // "./plugins/quests.js"
+      // "./plugins/rules.js",       // ⚠️ deaktiviert, weil Rules jetzt im Main-Code pro Account laufen
+      // "./plugins/two-accounts.js" // ⚠️ deaktiviert, weil Accounts jetzt im Main-Code sind
+      // später: "./plugins/weekly.js", "./plugins/quests.js"
     ];
 
     function load(src){
       var s = document.createElement("script");
-      s.src = src + "?v=" + Date.now(); // Cache-Bust
+      s.src = src + "?v=" + Date.now();
       s.defer = true;
       s.onerror = function(){ console.log("Plugin nicht gefunden:", src); };
       document.head.appendChild(s);
@@ -819,6 +1166,6 @@
     for (var i=0;i<plugins.length;i++) load(plugins[i]);
   })();
 </script>
-  
+
 </body>
 </html>
