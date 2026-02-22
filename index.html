@@ -795,17 +795,28 @@
   setupPWA();
 </script>
 
-  <!-- CCC Plugin Loader -->
+<!-- CCC Plugin Loader (multi) -->
 <script>
-  (function loadPlugin(src){
-    var s = document.createElement('script');
-    s.src = src + "?v=" + Date.now();
-    s.defer = true;
-    s.onerror = function(){
-      console.log("Plugin nicht gefunden:", src);
-    };
-    document.head.appendChild(s);
-  })("./plugins/extras.js");
+  (function(){
+    var plugins = [
+      "./plugins/safearea.js",
+      "./plugins/rules.js"
+      // später einfach erweitern:
+      // "./plugins/two-accounts.js",
+      // "./plugins/weekly.js",
+      // "./plugins/quests.js"
+    ];
+
+    function load(src){
+      var s = document.createElement("script");
+      s.src = src + "?v=" + Date.now(); // Cache-Bust
+      s.defer = true;
+      s.onerror = function(){ console.log("Plugin nicht gefunden:", src); };
+      document.head.appendChild(s);
+    }
+
+    for (var i=0;i<plugins.length;i++) load(plugins[i]);
+  })();
 </script>
   
 </body>
