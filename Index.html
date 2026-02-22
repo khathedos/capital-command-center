@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <title>Capital Command Center</title>
+
+  <!-- PWA / Theme -->
+  <meta name="theme-color" content="#0b1220">
+  <meta name="color-scheme" content="dark">
+  <link rel="manifest" href="manifest.webmanifest">
+
+  <!-- iOS "App Mode" -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Capital Command">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <!-- Icon (Platzhalter):
+       iOS Home Icon kommt idealerweise aus apple-touch-icon.png (180x180).
+       Wenn du es noch nicht hast, funktioniert es trotzdem, Safari nimmt dann oft ein Screenshot. -->
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+
+  <!-- Optional: iOS Splash (echte Startup Images sind viele Größen; später möglich) -->
+  <!-- <link rel="apple-touch-startup-image" href="splash-1170x2532.png" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"> -->
+
+  <style>
+    :root{
+      --bg:#0b1220;
+      --panel:#111b2e;
+      --panel2:#0f172a;
+      --text:#e5e7eb;
+      --muted:#93a4b8;
+      --good:#22c55e;
+      --warn:#f59e0b;
+      --bad:#ef4444;
+      --line:#23304a;
+      --accent:#60a5fa;
+      --shadow: 0 14px 30px rgba(0,0,0,.28);
+      --r:16px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      background: radial-gradient(1200px 800px at 20% 10%, #16284a 0%, var(--bg) 55%) fixed;
+      color:var(--text);
+    }
+    header{
+      padding:18px 16px 12px;
+      border-bottom:1px solid rgba(255,255,255,.06);
+      background: rgba(10,16,28,.72);
+      backdrop-filter: blur(10px);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .wrap{max-width:1120px;margin:0 auto;}
+    h1{margin:0;font-size:20px;letter-spacing:.2px}
+    .sub{margin-top:6px;color:var(--muted);font-size:13px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .pill{
+      display:inline-flex;align-items:center;gap:8px;
+      padding:6px 10px;border-radius:999px;
+      font-size:12px;font-weight:800;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(17,27,46,.65);
+      color:#dbe6ff;
+    }
+    .pill.good{border-color: rgba(34,197,94,.35); background: rgba(34,197,94,.10)}
+    .pill.warn{border-color: rgba(245,158,11,.35); background: rgba(245,158,11,.10)}
+    .pill.bad{border-color: rgba(239,68,68,.35); background: rgba(239,68,68,.10)}
+    .grid{
+      display:grid;
+      grid-template-columns: 1.12fr .88fr;
+      gap:16px;
+      padding:16px;
+    }
+    @media (max-width: 980px){ .grid{grid-template-columns:1fr} }
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.03));
+      border:1px solid rgba(255,255,255,.07);
+      border-radius: var(--r);
+      padding:16px;
+      box-shadow: var(--shadow);
+    }
+    .card h2{margin:0 0 10px 0;font-size:14px;color:#dbe6ff;letter-spacing:.2px}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+    label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+    input, select, button, textarea{
+      font: inherit;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(13,21,36,.55);
+      color: var(--text);
+      padding:10px 12px;
+      outline:none;
+    }
+    input:focus, select:focus, textarea:focus{border-color: rgba(96,165,250,.55); box-shadow: 0 0 0 3px rgba(96,165,250,.15)}
+    button{
+      background: linear-gradient(90deg, rgba(96,165,250,.95), rgba(34,197,94,.95));
+      color:#06121a;
+      font-weight:900;
+      cursor:pointer;
+      border:none;
+      padding:10px 14px;
+    }
+    button.secondary{
+      background: rgba(96,165,250,.12);
+      border:1px solid rgba(96,165,250,.35);
+      color:#cfe3ff;
+      font-weight:800;
+    }
+    button.danger{
+      background: rgba(239,68,68,.18);
+      border:1px solid rgba(239,68,68,.45);
+      color:#ffd6d6;
+      font-weight:900;
+    }
+    .hr{height:1px;background: rgba(255,255,255,.07);margin:14px 0}
+    .big{font-size:34px;font-weight:950;letter-spacing:.3px;margin:4px 0 0 0}
+    .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
+    @media (max-width: 640px){ .kpis{grid-template-columns:1fr} }
+    .kpi{
+      padding:12px;border-radius:14px;
+      background: rgba(17,27,46,.55);
+      border:1px solid rgba(255,255,255,.08);
+    }
+    .kpi .t{font-size:12px;color:var(--muted)}
+    .kpi .v{margin-top:6px;font-weight:950;font-size:16px}
+    .bar{height:14px;border-radius:999px;background: rgba(255,255,255,.08);overflow:hidden;border:1px solid rgba(255,255,255,.08)}
+    .bar > div{height:100%;width:0%;border-radius:999px;transition:width .35s ease}
+    .fill-ok{background: linear-gradient(90deg, rgba(96,165,250,.95), rgba(34,197,94,.95));}
+    .fill-warn{background: linear-gradient(90deg, rgba(245,158,11,.95), rgba(239,68,68,.95));}
+    .two{display:grid;grid-template-columns: 1fr 1fr;gap:12px}
+    @media (max-width: 700px){ .two{grid-template-columns:1fr} }
+    .stageBox{
+      display:flex;justify-content:space-between;gap:12px;align-items:flex-start;
+      background: rgba(17,27,46,.55);
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:14px;
+      padding:12px;
+    }
+    .stageTitle{font-weight:950;font-size:14px}
+    .stageText{margin-top:6px;color:var(--muted);font-size:12px;line-height:1.35;white-space:pre-line}
+    canvas{
+      width:100%;
+      height:240px;
+      background: rgba(13,21,36,.35);
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:14px;
+    }
+    table{
+      width:100%;
+      border-collapse: collapse;
+      border-radius:14px;
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,.08);
+    }
+    th, td{
+      padding:10px 10px;
+      font-size:12px;
+      border-bottom:1px solid rgba(255,255,255,.06);
+      text-align:left;
+      vertical-align:top;
+    }
+    th{color:#cfe3ff;background: rgba(17,27,46,.55)}
+    tr:last-child td{border-bottom:none}
+    .right{text-align:right}
+    .tiny{font-size:11px;color:var(--muted)}
+    .alert{
+      border-radius:14px;padding:12px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(17,27,46,.55);
+      margin-top:12px;display:none;
+    }
+    .alert.show{display:block}
+    .alert.good{border-color: rgba(34,197,94,.35); background: rgba(34,197,94,.10)}
+    .alert.warn{border-color: rgba(245,158,11,.35); background: rgba(245,158,11,.10)}
+    .alert.bad{border-color: rgba(239,68,68,.35); background: rgba(239,68,68,.10)}
+    .tag{
+      display:inline-block;padding:3px 8px;border-radius:999px;font-size:11px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(17,27,46,.45);
+      margin-right:6px;margin-top:3px;white-space:nowrap;
+    }
+    .tag.good{border-color: rgba(34,197,94,.35); background: rgba(34,197,94,.10)}
+    .tag.warn{border-color: rgba(245,158,11,.35); background: rgba(245,158,11,.10)}
+    .tag.bad{border-color: rgba(239,68,68,.35); background: rgba(239,68,68,.10)}
+    .note{margin-top:10px;font-size:12px;color:var(--muted);line-height:1.4}
+  </style>
+</head>
+
+<body>
+<header>
+  <div class="wrap">
+    <h1>🚀 Capital Command Center</h1>
+    <div class="sub">
+      <span class="pill" id="pwaPill">PWA: checking…</span>
+      <span class="pill good" id="statusPill">Status: OK</span>
+      <span class="pill" id="stagePill">Stage —</span>
+      <span class="pill" id="streakPill">Streak: —</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="grid">
+    <!-- LEFT -->
+    <div class="card">
+      <h2>Kontrollpanel</h2>
+      <div class="row">
+        <div style="flex:1;min-width:190px">
+          <label>Aktuelles Kapital (USD)</label>
+          <input id="capitalInput" type="number" step="0.01" placeholder="z.B. 39" />
+        </div>
+        <div style="flex:1;min-width:190px">
+          <label>Einzahlung heute (optional)</label>
+          <input id="depositInput" type="number" step="0.01" placeholder="z.B. 0 oder 100" />
+        </div>
+        <div style="flex:1;min-width:190px">
+          <label>Notiz</label>
+          <input id="noteInput" type="text" placeholder="z.B. Bot wartet / Trend down" />
+        </div>
+        <div style="min-width:160px">
+          <button id="saveBtn">Eintrag speichern</button>
+        </div>
+      </div>
+
+      <div class="hr"></div>
+
+      <div class="two">
+        <div>
+          <div class="tiny">Aktueller Stand</div>
+          <div class="big" id="capitalBig">$39.00</div>
+          <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+            <span class="pill" id="riskPill">Risk: —</span>
+            <span class="pill" id="nextTargetPill">Next: —</span>
+          </div>
+
+          <div class="kpis">
+            <div class="kpi">
+              <div class="t">Nächstes Ziel</div>
+              <div class="v" id="nextTargetKpi">$60</div>
+              <div class="tiny" id="toNextTiny">noch $21</div>
+            </div>
+            <div class="kpi">
+              <div class="t">50K Mission</div>
+              <div class="v" id="missionPctKpi">0.08%</div>
+              <div class="tiny" id="missionLeftTiny">rest $49,961</div>
+            </div>
+            <div class="kpi">
+              <div class="t">Max Tagesverlust</div>
+              <div class="v" id="dailyLossKpi">$12</div>
+              <div class="tiny">Kill-Switch respektieren</div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="tiny">Progress zum nächsten Ziel</div>
+          <div style="margin-top:10px" class="bar">
+            <div id="nextBar" class="fill-ok"></div>
+          </div>
+          <div class="tiny" style="margin-top:8px" id="nextBarLabel">0%</div>
+
+          <div class="tiny" style="margin-top:14px">Progress bis 50.000</div>
+          <div style="margin-top:10px" class="bar">
+            <div id="missionBar" class="fill-ok"></div>
+          </div>
+          <div class="tiny" style="margin-top:8px" id="missionBarLabel">0%</div>
+
+          <div class="alert" id="alertBox"></div>
+        </div>
+      </div>
+
+      <div class="hr"></div>
+
+      <h2>Stage-Regeln (fixer Plan)</h2>
+      <div class="stageBox">
+        <div>
+          <div class="stageTitle" id="stageTitle">—</div>
+          <div class="stageText" id="stageRules"></div>
+          <div style="margin-top:10px">
+            <span class="tag good" id="tag1"></span>
+            <span class="tag warn" id="tag2"></span>
+            <span class="tag bad" id="tag3"></span>
+          </div>
+        </div>
+        <div style="text-align:right;min-width:190px">
+          <div class="tiny">Nächster Trigger</div>
+          <div style="font-weight:950;margin-top:6px" id="triggerText">—</div>
+          <div class="note" id="triggerNote"></div>
+
+          <div class="hr"></div>
+          <div class="row" style="justify-content:flex-end">
+            <button class="secondary" id="exportBtn">Export JSON</button>
+            <button class="secondary" id="importBtn">Import</button>
+            <button class="danger" id="resetBtn">Reset</button>
+          </div>
+          <div class="note tiny">Export ist dein Backup (iCloud/Files).</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="card">
+      <h2>Kapital-Verlauf</h2>
+      <canvas id="chart" width="1000" height="520"></canvas>
+      <div class="row" style="margin-top:10px;justify-content:space-between">
+        <div class="tiny" id="chartHint">Letzte 90 Einträge • lokal gespeichert</div>
+        <div class="tiny" id="ddHint">Drawdown: —</div>
+      </div>
+
+      <div class="hr"></div>
+
+      <h2>Journal (letzte Einträge)</h2>
+      <div style="max-height: 320px; overflow:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Datum</th>
+              <th class="right">Kapital</th>
+              <th class="right">Einzahlung</th>
+              <th>Notiz</th>
+            </tr>
+          </thead>
+          <tbody id="logBody"></tbody>
+        </table>
+      </div>
+
+      <div class="hr"></div>
+
+      <h2>Extras</h2>
+      <div class="note">
+        ✅ Streak zählt Tage mit Eintrag<br/>
+        ✅ Warnungen bei Drawdown / Kill-Switch<br/>
+        ✅ Offline-Cache (wenn über https gehostet)<br/>
+        ➕ Als Nächstes: Zwei-Konten-Modus (Aggro + Build), Regel-Breach-Detector, Wochenquests
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // --------------------------
+  // DATA + STAGES
+  // --------------------------
+  const STORAGE_KEY = "ccc_entries_v3";
+  const STORAGE_META = "ccc_meta_v3";
+  const MISSION_TARGET = 50000;
+  const MAX_ENTRIES = 90;
+
+  const stages = [
+    {
+      id: 0,
+      name: "Stage 0 – Controlled Explosion",
+      min: 0, max: 59.999, next: 60,
+      riskLabel: "Risk: Seed",
+      dailyMaxLoss: 12,
+      tags: [
+        {text: "Bot: 30$ | 10x", type:"good"},
+        {text: "SL 6–8% | TP 18–22%", type:"warn"},
+        {text: "Kill: <25$ STOP", type:"bad"},
+      ],
+      rules:
+`Ziel: 39$ → 60$
+• 1 Position gleichzeitig
+• Hebel ≤ 10x (nie erhöhen)
+• Max 2 Verlustzyklen
+• Unter 25$ sofort STOP (kein Nachschießen)`
+    },
+    {
+      id: 1,
+      name: "Stage 1 – Stabilization Mode",
+      min: 60, max: 99.999, next: 100,
+      riskLabel: "Risk: Stabilize",
+      dailyMaxLoss: 10,
+      tags: [
+        {text: "Aktiv: 40$ | Gesichert: 20$", type:"good"},
+        {text: "Hebel 8x", type:"warn"},
+        {text: "Kein Reset zulassen", type:"bad"},
+      ],
+      rules:
+`Ziel: 60$ → 100$
+• Risiko runter, Gewinne halten
+• Hebel ~8x
+• Wenn Rückfall <52$ → Pause & Review`
+    },
+    {
+      id: 2,
+      name: "Stage 2 – Controlled Growth",
+      min: 100, max: 149.999, next: 150,
+      riskLabel: "Risk: Controlled",
+      dailyMaxLoss: 12,
+      tags: [
+        {text: "Aktiv: 60$ | Gesichert: 40$", type:"good"},
+        {text: "SL 5–6% | TP 15–18%", type:"warn"},
+        {text: "Keine YOLO-Trades", type:"bad"},
+      ],
+      rules:
+`Ziel: 100$ → 150$
+• Stabil wachsen, kein Overtrade
+• Keine Hebel-Experimente
+• Max 1–2 Trades parallel`
+    },
+    {
+      id: 3,
+      name: "Stage 3 – Capital Expansion",
+      min: 150, max: 299.999, next: 300,
+      riskLabel: "Risk: Build",
+      dailyMaxLoss: 15,
+      tags: [
+        {text: "Jetzt 100€ Nachschub → ~250$", type:"good"},
+        {text: "Futures 6–8x + Spot Swing", type:"warn"},
+        {text: "Reserve halten", type:"bad"},
+      ],
+      rules:
+`Ziel: 150$ → 300$
+• Ab hier Mix (Trend + Swing + Reserve)
+• Fokus: Überleben + Skalierung`
+    },
+    {
+      id: 4,
+      name: "Stage 4 – Professional Scaling",
+      min: 300, max: 999.999, next: 1000,
+      riskLabel: "Risk: Pro",
+      dailyMaxLoss: 20,
+      tags: [
+        {text: "Max 5% Risiko/Trade", type:"good"},
+        {text: "Hebel konservativ", type:"warn"},
+        {text: "Keine Gier-Rückfälle", type:"bad"},
+      ],
+      rules:
+`Ziel: 300$ → 1000$
+• Konsistenz > Sensation
+• Risiko deckeln, Gewinne sichern`
+    },
+    {
+      id: 5,
+      name: "Stage 5 – 50K Mission Activated",
+      min: 1000, max: Infinity, next: MISSION_TARGET,
+      riskLabel: "Risk: Mission",
+      dailyMaxLoss: 30,
+      tags: [
+        {text: "1–3% Risiko/Trade", type:"good"},
+        {text: "Monatlich 15–25% realistisch", type:"warn"},
+        {text: "Kapital schützen > alles", type:"bad"},
+      ],
+      rules:
+`Ziel: 1.000$ → 50.000$
+• Business-Modus
+• Review, Prozesse, Schutz
+• Skalierung über Zeit`
+    }
+  ];
+
+  const $ = (id)=>document.getElementById(id);
+  const clamp = (x,a,b)=>Math.max(a,Math.min(b,x));
+  const fmt = (n)=>"$" + (Number(n)||0).toFixed(2);
+  const fmt0 = (n)=>"$" + Math.round(Number(n)||0);
+
+  function nowStamp(){
+    const d = new Date();
+    const pad = x => String(x).padStart(2,"0");
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  function loadEntries(){
+    try{ return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); }
+    catch{ return []; }
+  }
+  function saveEntries(arr){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(arr.slice(-MAX_ENTRIES)));
+  }
+  function loadMeta(){
+    try{ return JSON.parse(localStorage.getItem(STORAGE_META) || "{}"); }
+    catch{ return {}; }
+  }
+  function saveMeta(m){
+    localStorage.setItem(STORAGE_META, JSON.stringify(m));
+  }
+
+  function getStage(cap){
+    return stages.find(s=>cap>=s.min && cap<=s.max) || stages[0];
+  }
+
+  function computePeakDD(entries){
+    if(entries.length < 2) return {peak: entries[0]?.capital ?? 0, ddPct:0, ddAbs:0};
+    let peak = entries[0].capital;
+    for(const e of entries) peak = Math.max(peak, e.capital);
+    const cur = entries[entries.length-1].capital;
+    const ddAbs = peak - cur;
+    const ddPct = peak>0 ? (ddAbs/peak)*100 : 0;
+    return {peak, ddPct, ddAbs};
+  }
+
+  function computeStreak(entries){
+    // streak = consecutive calendar days with at least one entry
+    // simple approach: compare YYYY-MM-DD
+    const days = [...new Set(entries.map(e=>e.ts.slice(0,10)))].sort();
+    if(days.length === 0) return 0;
+    let streak = 1;
+    for(let i=days.length-1; i>0; i--){
+      const a = new Date(days[i]);
+      const b = new Date(days[i-1]);
+      const diffDays = Math.round((a - b) / (1000*60*60*24));
+      if(diffDays === 1) streak++;
+      else break;
+    }
+    return streak;
+  }
+
+  // --------------------------
+  // UI RENDER
+  // --------------------------
+  function render(){
+    const entries = loadEntries();
+    const cur = entries.length ? entries[entries.length-1].capital : 39;
+    $("capitalInput").value = cur;
+
+    const stage = getStage(cur);
+    $("capitalBig").textContent = fmt(cur);
+
+    $("stagePill").textContent = `Stage ${stage.id}`;
+    $("riskPill").textContent = stage.riskLabel;
+    $("nextTargetPill").textContent = `Next: ${fmt0(stage.next)}`;
+
+    $("dailyLossKpi").textContent = fmt0(stage.dailyMaxLoss);
+    $("nextTargetKpi").textContent = fmt0(stage.next);
+
+    const toNext = Math.max(0, stage.next - cur);
+    $("toNextTiny").textContent = toNext>0 ? `noch ${fmt0(toNext)}` : "Ziel erreicht ✅";
+
+    const nextPct = clamp((cur / stage.next) * 100, 0, 100);
+    $("nextBar").style.width = nextPct + "%";
+    $("nextBarLabel").textContent = `${nextPct.toFixed(1)}% bis ${fmt0(stage.next)}`;
+
+    const missionPct = clamp((cur / MISSION_TARGET) * 100, 0, 100);
+    $("missionPctKpi").textContent = `${missionPct.toFixed(2)}%`;
+    $("missionBar").style.width = missionPct + "%";
+    $("missionBarLabel").textContent = `${missionPct.toFixed(3)}% von ${fmt0(MISSION_TARGET)}`;
+    $("missionLeftTiny").textContent = `rest ${fmt0(Math.max(0, MISSION_TARGET - cur))}`;
+
+    $("stageTitle").textContent = stage.name;
+    $("stageRules").textContent = stage.rules;
+
+    // tags
+    const tags = stage.tags;
+    $("tag1").textContent = tags[0].text; $("tag1").className = "tag " + tags[0].type;
+    $("tag2").textContent = tags[1].text; $("tag2").className = "tag " + tags[1].type;
+    $("tag3").textContent = tags[2].text; $("tag3").className = "tag " + tags[2].type;
+
+    $("triggerText").textContent =
+      stage.id < 5 ? `${fmt0(stage.next)} → Stage ${stage.id+1}` : `${fmt0(MISSION_TARGET)} → Mission`;
+    $("triggerNote").textContent =
+      stage.id === 0 ? "Unter 25$ STOP. Kein Nachschießen."
+      : stage.id === 1 ? "Hebel runter. Gewinne nicht zurückgeben."
+      : stage.id === 2 ? "Kontrolliertes Wachstum."
+      : stage.id === 3 ? "Mix + Reserve."
+      : stage.id === 4 ? "Prozess > Gefühl."
+      : "Business Mode.";
+
+    // Drawdown + Kill switches
+    const dd = computePeakDD(entries);
+    $("ddHint").textContent = `Drawdown: −${dd.ddPct.toFixed(1)}% (Peak ${fmt(dd.peak)})`;
+
+    const alert = $("alertBox");
+    alert.className = "alert";
+    alert.innerHTML = "";
+
+    const kill = (stage.id === 0 && cur < 25) || (stage.id === 1 && cur < 52);
+    const severe = dd.ddPct >= 25 && entries.length >= 4;
+
+    if(kill){
+      alert.className = "alert show bad";
+      alert.innerHTML = `<b>🛑 KILL SWITCH</b><br/>Kapital unter kritischem Level. Bot pausieren. 24h Pause.`;
+      $("statusPill").className = "pill bad";
+      $("statusPill").textContent = "Status: STOP";
+      $("nextBar").className = "fill-warn";
+    } else if(severe){
+      alert.className = "alert show warn";
+      alert.innerHTML = `<b>⚠️ Drawdown Warnung</b><br/>Peak ${fmt(dd.peak)} → jetzt ${fmt(cur)} (−${dd.ddPct.toFixed(1)}%). Risiko reduzieren / pausieren.`;
+      $("statusPill").className = "pill warn";
+      $("statusPill").textContent = "Status: Vorsicht";
+      $("nextBar").className = "fill-warn";
+    } else {
+      $("statusPill").className = "pill good";
+      $("statusPill").textContent = "Status: OK";
+      $("nextBar").className = "fill-ok";
+    }
+
+    // streak
+    const streak = computeStreak(entries);
+    $("streakPill").textContent = `Streak: ${streak}d`;
+
+    // table + chart
+    renderLog(entries);
+    renderChart(entries);
+  }
+
+  function esc(s){
+    return String(s||"").replace(/[&<>"']/g, m=>({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+    }[m]));
+  }
+
+  function renderLog(entries){
+    const body = $("logBody");
+    body.innerHTML = "";
+    const rows = entries.slice().reverse().slice(0, 14);
+    for(const e of rows){
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${esc(e.ts)}</td>
+        <td class="right"><b>${fmt(e.capital)}</b></td>
+        <td class="right">${e.deposit ? fmt(e.deposit) : "—"}</td>
+        <td>${esc(e.note || "")}</td>
+      `;
+      body.appendChild(tr);
+    }
+    $("chartHint").textContent = `Letzte ${Math.min(entries.length, MAX_ENTRIES)} Einträge • lokal gespeichert`;
+  }
+
+  function renderChart(entries){
+    const canvas = $("chart");
+    const ctx = canvas.getContext("2d");
+
+    // HiDPI
+    const dpr = window.devicePixelRatio || 1;
+    const cssW = canvas.clientWidth;
+    const cssH = canvas.clientHeight;
+    canvas.width = Math.floor(cssW * dpr);
+    canvas.height = Math.floor(cssH * dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+
+    ctx.clearRect(0,0,cssW,cssH);
+
+    const pad = {l:48, r:18, t:18, b:34};
+    const W = cssW, H = cssH;
+    const plotW = W - pad.l - pad.r;
+    const plotH = H - pad.t - pad.b;
+
+    // bg
+    ctx.fillStyle = "rgba(13,21,36,.35)";
+    ctx.fillRect(0,0,W,H);
+
+    if(entries.length < 2){
+      ctx.fillStyle = "rgba(229,231,235,.75)";
+      ctx.font = "14px Arial";
+      ctx.fillText("Noch keine Verlaufspunkte (mind. 2 Einträge).", pad.l, pad.t+20);
+      return;
+    }
+
+    const vals = entries.map(e=>e.capital);
+    let minV = Math.min(...vals);
+    let maxV = Math.max(...vals);
+    if(minV === maxV){ minV*=0.95; maxV*=1.05; }
+    const range = Math.max(1e-6, maxV-minV);
+
+    // grid
+    ctx.strokeStyle = "rgba(255,255,255,.10)";
+    ctx.lineWidth = 1;
+    const steps=5;
+    for(let i=0;i<=steps;i++){
+      const y = pad.t + (plotH/steps)*i;
+      ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(W-pad.r,y); ctx.stroke();
+      const v = maxV - (range/steps)*i;
+      ctx.fillStyle = "rgba(147,164,184,.85)";
+      ctx.font = "11px Arial";
+      ctx.fillText("$"+v.toFixed(0), 10, y+4);
+    }
+
+    // points
+    const n = entries.length;
+    const pts = entries.map((e,i)=>{
+      const x = pad.l + plotW*(i/(n-1));
+      const y = pad.t + plotH*(1-((e.capital-minV)/range));
+      return {x,y,v:e.capital};
+    });
+
+    const grad = ctx.createLinearGradient(pad.l,pad.t,W-pad.r,pad.t);
+    grad.addColorStop(0,"rgba(96,165,250,.95)");
+    grad.addColorStop(1,"rgba(34,197,94,.95)");
+
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = 2.6;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x,pts[0].y);
+    for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x,pts[i].y);
+    ctx.stroke();
+
+    // last label
+    const last = pts[pts.length-1];
+    ctx.fillStyle = "rgba(17,27,46,.85)";
+    ctx.fillRect(last.x-48,last.y-26,96,22);
+    ctx.fillStyle = "rgba(229,231,235,.95)";
+    ctx.font = "12px Arial";
+    ctx.fillText(fmt(last.v), last.x-40, last.y-11);
+  }
+
+  // --------------------------
+  // ACTIONS
+  // --------------------------
+  function saveEntry(){
+    const cap = Number($("capitalInput").value);
+    if(!isFinite(cap) || cap <= 0){ alert("Bitte gültiges Kapital eingeben."); return; }
+    const dep = Number($("depositInput").value || 0);
+    const note = ($("noteInput").value || "").trim();
+
+    const entries = loadEntries();
+    entries.push({ ts: nowStamp(), capital: cap, deposit: isFinite(dep)?dep:0, note });
+    saveEntries(entries);
+
+    $("depositInput").value = "";
+    $("noteInput").value = "";
+    render();
+  }
+
+  function exportJSON(){
+    const entries = loadEntries();
+    const blob = new Blob([JSON.stringify({entries}, null, 2)], {type:"application/json"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "ccc-backup.json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function importJSON(){
+    const inp = document.createElement("input");
+    inp.type = "file";
+    inp.accept = "application/json";
+    inp.onchange = ()=>{
+      const f = inp.files && inp.files[0];
+      if(!f) return;
+      const r = new FileReader();
+      r.onload = ()=>{
+        try{
+          const data = JSON.parse(r.result);
+          if(data.entries && Array.isArray(data.entries)){
+            saveEntries(data.entries);
+            render();
+          } else {
+            alert("JSON hat kein 'entries' Array.");
+          }
+        }catch(e){
+          alert("Import fehlgeschlagen.");
+        }
+      };
+      r.readAsText(f);
+    };
+    inp.click();
+  }
+
+  function resetAll(){
+    if(!confirm("Wirklich resetten?")) return;
+    localStorage.removeItem(STORAGE_KEY);
+    render();
+  }
+
+  // --------------------------
+  // PWA: Service Worker (nur https / localhost)
+  // --------------------------
+  async function setupPWA(){
+    const pill = $("pwaPill");
+    const isSecure = location.protocol === "https:" || location.hostname === "localhost";
+    if(!isSecure){
+      pill.className = "pill warn";
+      pill.textContent = "PWA: local file (SW off)";
+      return;
+    }
+    if("serviceWorker" in navigator){
+      try{
+        await navigator.serviceWorker.register("sw.js");
+        pill.className = "pill good";
+        pill.textContent = "PWA: cached ✅";
+      }catch(e){
+        pill.className = "pill warn";
+        pill.textContent = "PWA: SW failed";
+      }
+    }else{
+      pill.className = "pill warn";
+      pill.textContent = "PWA: no SW";
+    }
+  }
+
+  // events
+  $("saveBtn").addEventListener("click", saveEntry);
+  $("exportBtn").addEventListener("click", exportJSON);
+  $("importBtn").addEventListener("click", importJSON);
+  $("resetBtn").addEventListener("click", resetAll);
+
+  // boot
+  render();
+  setupPWA();
+</script>
+</body>
+</html>

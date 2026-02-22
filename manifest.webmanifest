@@ -1,0 +1,16 @@
+{
+  "name": "Capital Command Center",
+  "short_name": "CapitalCmd",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "description": "Stage-System + Risk Engine + Progress bis 50k",
+  "icons": [
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
