@@ -5,12 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
   <title>Capital Command Center</title>
 
-  <!-- PWA / Theme -->
   <meta name="theme-color" content="#0b1220">
   <meta name="color-scheme" content="dark">
   <link rel="manifest" href="manifest.webmanifest">
 
-  <!-- iOS "App Mode" -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Capital Command">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -118,7 +116,7 @@
       color:#ffd6d6;
       font-weight:900;
     }
-    button:disabled, input:disabled{
+    button:disabled, input:disabled, select:disabled{
       opacity:.55;
       cursor:not-allowed;
     }
@@ -193,6 +191,25 @@
     .tag.warn{border-color: rgba(245,158,11,.35); background: rgba(245,158,11,.10)}
     .tag.bad{border-color: rgba(239,68,68,.35); background: rgba(239,68,68,.10)}
     .note{margin-top:10px;font-size:12px;color:var(--muted);line-height:1.4}
+
+    /* PRO Tabs */
+    .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    .tab{
+      padding:7px 10px;border-radius:999px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(17,27,46,.45);
+      color:#cfe3ff;font-weight:900;font-size:12px;
+      cursor:pointer;
+      user-select:none;
+    }
+    .tab.active{
+      background: rgba(96,165,250,.20);
+      border-color: rgba(96,165,250,.35);
+    }
+    .proPanel{margin-top:12px}
+    .proGrid{display:grid;grid-template-columns:1fr;gap:12px}
+    .miniRow{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .mini{font-size:12px;color:var(--muted)}
   </style>
 </head>
 
@@ -329,8 +346,8 @@
 
       <div class="hr"></div>
 
-      <h2>Journal (letzte Einträge)</h2>
-      <div style="max-height: 320px; overflow:auto;">
+      <h2>Journal (Kapital-Einträge)</h2>
+      <div style="max-height: 240px; overflow:auto;">
         <table>
           <thead>
             <tr>
@@ -338,7 +355,6 @@
               <th class="right">Kapital</th>
               <th class="right">Einzahlung</th>
               <th>Notiz</th>
-              <th id="accColHead" style="display:none">Account</th>
             </tr>
           </thead>
           <tbody id="logBody"></tbody>
@@ -347,11 +363,17 @@
 
       <div class="hr"></div>
 
+      <h2>PRO Dashboard</h2>
+      <div class="tabs" id="proTabs"></div>
+      <div class="proPanel" id="proPanel"></div>
+
+      <div class="hr"></div>
+
       <h2>Extras</h2>
-      <div class="note" id="extrasNote">
-        ✅ Aggro / Safe getrennte Konten (Kapital, Einzahlungen, Journal, Chart)<br/>
-        ✅ Gesamt = nur Anzeige (kombiniert), kein Speichern<br/>
-        ✅ Warnungen bei Drawdown / Kill-Switch pro Account<br/>
+      <div class="note">
+        ✅ Aggro / Safe getrennt<br/>
+        ✅ Gesamt = read-only (Summe + Milestones)<br/>
+        ✅ PRO Module als Plugins (Updates = nur neue Datei)<br/>
       </div>
     </div>
   </div>
@@ -359,805 +381,833 @@
 
 <script>
   // ==========================
-  // ACCOUNTS + STORAGE
+  // CORE: CCC API (stabil, plugin-freundlich)
   // ==========================
-  const ACTIVE_ACCOUNT_KEY = "ccc_active_account_v2";
-  const BASE_KEY = "ccc_entries_v4";
-  const MAX_ENTRIES = 90;
-  const MISSION_TARGET = 50000;
+  (function(){
+    const ACTIVE_ACCOUNT_KEY = "ccc_active_account_v3";
+    const BASE_KEY = "ccc_entries_v5";
+    const MAX_ENTRIES = 90;
+    const MISSION_TARGET = 50000;
 
-  const $ = (id)=>document.getElementById(id);
-  const clamp = (x,a,b)=>Math.max(a,Math.min(b,x));
-  const fmt = (n)=>"$" + (Number(n)||0).toFixed(2);
-  const fmt0 = (n)=>"$" + Math.round(Number(n)||0);
+    const $ = (id)=>document.getElementById(id);
+    const clamp = (x,a,b)=>Math.max(a,Math.min(b,x));
+    const fmt = (n)=>"$" + (Number(n)||0).toFixed(2);
+    const fmt0 = (n)=>"$" + Math.round(Number(n)||0);
 
-  function nowStamp(){
-    const d = new Date();
-    const pad = x => String(x).padStart(2,"0");
-    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  }
+    function nowStamp(){
+      const d = new Date();
+      const pad = x => String(x).padStart(2,"0");
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
 
-  function getActiveAccount(){
-    return localStorage.getItem(ACTIVE_ACCOUNT_KEY) || "aggro";
-  }
-  function setActiveAccount(id){
-    localStorage.setItem(ACTIVE_ACCOUNT_KEY, id);
-  }
+    function getActiveAccount(){
+      return localStorage.getItem(ACTIVE_ACCOUNT_KEY) || "aggro";
+    }
+    function setActiveAccount(id){
+      localStorage.setItem(ACTIVE_ACCOUNT_KEY, id);
+      window.dispatchEvent(new CustomEvent("ccc:account", { detail: { account:id }}));
+    }
 
-  function storageKey(account){
-    if(account === "aggro") return BASE_KEY + "__aggro";
-    if(account === "safe")  return BASE_KEY + "__safe";
-    // total has no storage (read-only)
-    return BASE_KEY + "__aggro";
-  }
+    function storageKey(account){
+      if(account === "aggro") return BASE_KEY + "__aggro";
+      if(account === "safe")  return BASE_KEY + "__safe";
+      return BASE_KEY + "__aggro";
+    }
 
-  function loadEntries(account){
-    try { return JSON.parse(localStorage.getItem(storageKey(account)) || "[]"); }
-    catch { return []; }
-  }
+    function loadEntries(account){
+      try { return JSON.parse(localStorage.getItem(storageKey(account)) || "[]"); }
+      catch { return []; }
+    }
 
-  function saveEntries(account, arr){
-    localStorage.setItem(storageKey(account), JSON.stringify(arr.slice(-MAX_ENTRIES)));
-  }
+    function saveEntries(account, arr){
+      localStorage.setItem(storageKey(account), JSON.stringify(arr.slice(-MAX_ENTRIES)));
+    }
 
-  function mergedTotalEntries(){
-    const a = loadEntries("aggro").map(e=>({...e, _acc:"Aggro"}));
-    const s = loadEntries("safe").map(e=>({...e, _acc:"Safe"}));
-    return [...a, ...s].sort((x,y)=>String(x.ts||"").localeCompare(String(y.ts||"")));
-  }
+    function mergedTotalEntries(){
+      const a = loadEntries("aggro").map(e=>({...e, _acc:"Aggro"}));
+      const s = loadEntries("safe").map(e=>({...e, _acc:"Safe"}));
+      return [...a, ...s].sort((x,y)=>String(x.ts||"").localeCompare(String(y.ts||"")));
+    }
 
-  function lastCapital(entries, fallback=0){
-    if(!entries.length) return fallback;
-    const v = Number(entries[entries.length-1].capital);
-    return isFinite(v) ? v : fallback;
-  }
+    function lastCapital(entries, fallback=0){
+      if(!entries.length) return fallback;
+      const v = Number(entries[entries.length-1].capital);
+      return isFinite(v) ? v : fallback;
+    }
 
-  // ==========================
-  // STAGES (separiert)
-  // ==========================
-  // Aggro Stages: schneller, riskanter (wie dein Seed-Plan)
-  const stagesAggro = [
-    {
-      id: "A0",
-      name: "Aggro A0 – Controlled Explosion",
-      min: 0, max: 59.999, next: 60,
-      riskLabel: "Risk: Seed",
-      dailyMaxLoss: 12,
-      tags: [
-        {text: "Bot: 30$ | 10x", type:"good"},
-        {text: "SL 6–8% | TP 18–22%", type:"warn"},
-        {text: "Kill: <25$ STOP", type:"bad"},
-      ],
-      rules:
-`TRADING (Aggro Template)
+    // ==========================
+    // STAGES
+    // ==========================
+    const stagesAggro = [
+      {
+        id: "A0",
+        name: "Aggro A0 – Controlled Explosion",
+        min: 0, max: 59.999, next: 60,
+        riskLabel: "Risk: Seed",
+        dailyMaxLoss: 12,
+        tags: [
+          {text: "Bot: 30$ | 10x", type:"good"},
+          {text: "SL 6–8% | TP 18–22%", type:"warn"},
+          {text: "Kill: <25$ STOP", type:"bad"},
+        ],
+        rules:
+`TRADING (Aggro)
 • Max 1 Position gleichzeitig
 • Hebel ≤ 10x (nicht erhöhen)
-• Stop-Loss 6–8% (immer gesetzt)
-• Take-Profit 18–22%
+• SL 6–8% (immer)
+• TP 18–22%
 • Max 2 Verlustzyklen/Tag → Pause
 
-STAGE-ZIEL
-• ${fmt0(39)} → ${fmt0(60)}
-• Unter ${fmt0(25)} = STOP (kein Nachschießen)`
-    },
-    {
-      id: "A1",
-      name: "Aggro A1 – Stabilization Mode",
-      min: 60, max: 99.999, next: 100,
-      riskLabel: "Risk: Stabilize",
-      dailyMaxLoss: 10,
-      tags: [
-        {text: "Aktiv: 40$ | Gesichert: 20$", type:"good"},
-        {text: "Hebel ~8x", type:"warn"},
-        {text: "Wenn <52$ → Pause", type:"bad"},
-      ],
-      rules:
-`TRADING (Aggro, etwas ruhiger)
+KILL
+• Unter $25: STOP (kein Nachschießen)`
+      },
+      {
+        id: "A1",
+        name: "Aggro A1 – Stabilization Mode",
+        min: 60, max: 99.999, next: 100,
+        riskLabel: "Risk: Stabilize",
+        dailyMaxLoss: 10,
+        tags: [
+          {text: "Hebel ~8x", type:"good"},
+          {text: "SL 5–7% | TP 15–18%", type:"warn"},
+          {text: "Wenn <52$ → Pause", type:"bad"},
+        ],
+        rules:
+`TRADING
 • Hebel ~8x
 • SL 5–7% | TP 15–18%
 • Keine Revenge-Trades
 
-STAGE-ZIEL
-• ${fmt0(60)} → ${fmt0(100)}
-• Wenn Rückfall < ${fmt0(52)} → 24h Pause & Review`
-    },
-    {
-      id: "A2",
-      name: "Aggro A2 – Controlled Growth",
-      min: 100, max: 149.999, next: 150,
-      riskLabel: "Risk: Controlled",
-      dailyMaxLoss: 12,
-      tags: [
-        {text: "Aktiv: 60$ | Gesichert: 40$", type:"good"},
-        {text: "SL 5–6% | TP 15–18%", type:"warn"},
-        {text: "Keine YOLO-Trades", type:"bad"},
-      ],
-      rules:
+KILL
+• Wenn < $52: 24h Pause & Review`
+      },
+      {
+        id: "A2",
+        name: "Aggro A2 – Controlled Growth",
+        min: 100, max: 149.999, next: 150,
+        riskLabel: "Risk: Controlled",
+        dailyMaxLoss: 12,
+        tags: [
+          {text: "Konstanz", type:"good"},
+          {text: "SL 5–6% | TP 15–18%", type:"warn"},
+          {text: "Kein YOLO", type:"bad"},
+        ],
+        rules:
 `TRADING
-• Konsistenz > Sensation
-• Max 1–2 Trades/Tag, wenn Setup sauber
-• Kein Martingale / kein Nachkaufen
-
-STAGE-ZIEL
-• ${fmt0(100)} → ${fmt0(150)}`
-    },
-    {
-      id: "A3",
-      name: "Aggro A3 – Capital Expansion",
-      min: 150, max: 299.999, next: 300,
-      riskLabel: "Risk: Build",
-      dailyMaxLoss: 15,
-      tags: [
-        {text: "Mix Trend + Reserve", type:"good"},
-        {text: "Hebel 6–8x", type:"warn"},
-        {text: "Reserve halten", type:"bad"},
-      ],
-      rules:
+• Weniger Trades, bessere Qualität
+• Keine Hebel-Experimente
+• Kein Martingale`
+      },
+      {
+        id: "A3",
+        name: "Aggro A3 – Expansion",
+        min: 150, max: 299.999, next: 300,
+        riskLabel: "Risk: Build",
+        dailyMaxLoss: 15,
+        tags: [
+          {text: "Mix Trend + Reserve", type:"good"},
+          {text: "Hebel 6–8x", type:"warn"},
+          {text: "Reserve halten", type:"bad"},
+        ],
+        rules:
 `TRADING
-• Mix: Trendbot + kleine Reserve
-• Hebel 6–8x
-• Gewinne teilweise sichern
-
-STAGE-ZIEL
-• ${fmt0(150)} → ${fmt0(300)}`
-    },
-    {
-      id: "A4",
-      name: "Aggro A4 – Professional Scaling",
-      min: 300, max: 999.999, next: 1000,
-      riskLabel: "Risk: Pro",
-      dailyMaxLoss: 20,
-      tags: [
-        {text: "Max ~5% Risiko/Trade", type:"good"},
-        {text: "Hebel konservativ", type:"warn"},
-        {text: "Keine Gier-Rückfälle", type:"bad"},
-      ],
-      rules:
+• Mix + Reserve
+• Gewinne teilweise sichern`
+      },
+      {
+        id: "A4",
+        name: "Aggro A4 – Pro Scaling",
+        min: 300, max: 999.999, next: 1000,
+        riskLabel: "Risk: Pro",
+        dailyMaxLoss: 20,
+        tags: [
+          {text: "≤5% Risiko/Trade", type:"good"},
+          {text: "Hebel konservativ", type:"warn"},
+          {text: "Kein Rückfall", type:"bad"},
+        ],
+        rules:
 `TRADING
 • Prozess > Gefühl
-• Risiko pro Trade deckeln
-• Gewinne sichern
-
-STAGE-ZIEL
-• ${fmt0(300)} → ${fmt0(1000)}`
-    },
-    {
-      id: "A5",
-      name: "Aggro A5 – Mission Activated",
-      min: 1000, max: Infinity, next: MISSION_TARGET,
-      riskLabel: "Risk: Mission",
-      dailyMaxLoss: 30,
-      tags: [
-        {text: "1–3% Risiko/Trade", type:"good"},
-        {text: "Monatlich 15–25% (realistisch)", type:"warn"},
-        {text: "Kapital schützen", type:"bad"},
-      ],
-      rules:
+• Risiko deckeln`
+      },
+      {
+        id: "A5",
+        name: "Aggro A5 – Mission",
+        min: 1000, max: Infinity, next: MISSION_TARGET,
+        riskLabel: "Risk: Mission",
+        dailyMaxLoss: 30,
+        tags: [
+          {text: "1–3% Risiko/Trade", type:"good"},
+          {text: "15–25%/Monat (realistisch)", type:"warn"},
+          {text: "Kapital schützen", type:"bad"},
+        ],
+        rules:
 `TRADING
-• Business-Modus
-• Reviews, Regeln, Schutz
+• Business Mode
+• Review & Schutz`
+      }
+    ];
 
-MISSION
-• ${fmt0(1000)} → ${fmt0(MISSION_TARGET)}`
-    }
-  ];
-
-  // Safe-Build Stages: weniger Hebel, mehr Schutz
-  const stagesSafe = [
-    {
-      id: "S0",
-      name: "Safe S0 – Stabil & Schutz",
-      min: 0, max: 149.999, next: 150,
-      riskLabel: "Risk: Stable",
-      dailyMaxLoss: 8,
-      tags: [
-        {text: "Hebel 2–5x (oder Spot/Grid)", type:"good"},
-        {text: "SL 3–5% | TP 8–12%", type:"warn"},
-        {text: "Keine Revenge Trades", type:"bad"},
-      ],
-      rules:
-`TRADING (Safe-Build Template)
-• Hebel 2–5x (nicht höher)
-• Stop-Loss 3–5% (immer)
-• Take-Profit 8–12%
-• Max 3 Trades/Tag (wenn Bot viel feuert → runterregeln)
+    const stagesSafe = [
+      {
+        id: "S0",
+        name: "Safe S0 – Start (Schutz zuerst)",
+        min: 0, max: 149.999, next: 150,
+        riskLabel: "Risk: Stable",
+        dailyMaxLoss: 8,
+        tags: [
+          {text: "Hebel 2–5x", type:"good"},
+          {text: "SL 3–5% | TP 8–12%", type:"warn"},
+          {text: "Keine Revenge", type:"bad"},
+        ],
+        rules:
+`TRADING (Safe)
+• Hebel 2–5x
+• SL 3–5% (immer)
+• TP 8–12%
+• Max 3 Trades/Tag
 • Nach Verlustserie → 24h Pause
 
-STAGE-ZIEL
-• Start ${fmt0(100)} → ${fmt0(150)}`
-    },
-    {
-      id: "S1",
-      name: "Safe S1 – Build",
-      min: 150, max: 249.999, next: 250,
-      riskLabel: "Risk: Build",
-      dailyMaxLoss: 10,
-      tags: [
-        {text: "Hebel 2–5x", type:"good"},
-        {text: "TP kleiner, öfter sichern", type:"warn"},
-        {text: "Wenn <130$ → Pause", type:"bad"},
-      ],
-      rules:
+START
+• Safe startet bei $0 (Einzahlungen separat)`
+      },
+      {
+        id: "S1",
+        name: "Safe S1 – Build",
+        min: 150, max: 249.999, next: 250,
+        riskLabel: "Risk: Build",
+        dailyMaxLoss: 10,
+        tags: [
+          {text: "Gewinne sichern", type:"good"},
+          {text: "Keine Gier", type:"warn"},
+          {text: "Wenn <130$ → Pause", type:"bad"},
+        ],
+        rules:
 `TRADING
 • Gewinne regelmäßig sichern
-• Kein Überhebeln
-• Wenn Rückfall unter ${fmt0(130)} → Pause & Review
-
-STAGE-ZIEL
-• ${fmt0(150)} → ${fmt0(250)}`
-    },
-    {
-      id: "S2",
-      name: "Safe S2 – Grow",
-      min: 250, max: 499.999, next: 500,
-      riskLabel: "Risk: Grow",
-      dailyMaxLoss: 12,
-      tags: [
-        {text: "Konstanz > Hype", type:"good"},
-        {text: "SL 3–5% | TP 8–12%", type:"warn"},
-        {text: "Drawdown klein halten", type:"bad"},
-      ],
-      rules:
+• Wenn < $130: Pause & Review`
+      },
+      {
+        id: "S2",
+        name: "Safe S2 – Grow",
+        min: 250, max: 499.999, next: 500,
+        riskLabel: "Risk: Grow",
+        dailyMaxLoss: 12,
+        tags: [
+          {text: "Konstanz", type:"good"},
+          {text: "SL 3–5% | TP 8–12%", type:"warn"},
+          {text: "DD klein halten", type:"bad"},
+        ],
+        rules:
 `TRADING
-• Konstanz
-• Saubere Signale, wenig Overtrade
-
-STAGE-ZIEL
-• ${fmt0(250)} → ${fmt0(500)}`
-    },
-    {
-      id: "S3",
-      name: "Safe S3 – Scale",
-      min: 500, max: 999.999, next: 1000,
-      riskLabel: "Risk: Scale",
-      dailyMaxLoss: 15,
-      tags: [
-        {text: "Risiko weiter senken", type:"good"},
-        {text: "Gewinne sichern", type:"warn"},
-        {text: "Kapital schützen", type:"bad"},
-      ],
-      rules:
+• Konstanz > Tempo`
+      },
+      {
+        id: "S3",
+        name: "Safe S3 – Scale",
+        min: 500, max: 999.999, next: 1000,
+        riskLabel: "Risk: Scale",
+        dailyMaxLoss: 15,
+        tags: [
+          {text: "Risiko weiter senken", type:"good"},
+          {text: "Gewinne sichern", type:"warn"},
+          {text: "Kapital schützen", type:"bad"},
+        ],
+        rules:
 `TRADING
-• Risiko senken, Gewinn sichern
-• Nicht gierig werden
-
-STAGE-ZIEL
-• ${fmt0(500)} → ${fmt0(1000)}`
-    },
-    {
-      id: "S4",
-      name: "Safe S4 – Mission Prep",
-      min: 1000, max: Infinity, next: MISSION_TARGET,
-      riskLabel: "Risk: Mission",
-      dailyMaxLoss: 20,
-      tags: [
-        {text: "1–3% Risiko/Trade", type:"good"},
-        {text: "Prozess & Review", type:"warn"},
-        {text: "Schutz > alles", type:"bad"},
-      ],
-      rules:
+• Schutz & Review`
+      },
+      {
+        id: "S4",
+        name: "Safe S4 – Mission",
+        min: 1000, max: Infinity, next: MISSION_TARGET,
+        riskLabel: "Risk: Mission",
+        dailyMaxLoss: 20,
+        tags: [
+          {text: "1–3% Risiko/Trade", type:"good"},
+          {text: "Prozess", type:"warn"},
+          {text: "Schutz > alles", type:"bad"},
+        ],
+        rules:
 `TRADING
-• Business-Modus
-• Prozess, Review, Schutz
+• Business Mode`
+      }
+    ];
 
-MISSION
-• ${fmt0(1000)} → ${fmt0(MISSION_TARGET)}`
-    }
-  ];
+    const totalMilestones = [
+      { id:"G0", name:"Gesamt G0 – 100",  next:100,  note:"Boden. Disziplin > Tempo." },
+      { id:"G1", name:"Gesamt G1 – 300",  next:300,  note:"Momentum. Keine dummen Fehler." },
+      { id:"G2", name:"Gesamt G2 – 1k",   next:1000, note:"Konsistenz > Sensation." },
+      { id:"G3", name:"Gesamt G3 – 5k",   next:5000, note:"Schutz & Skalierung." },
+      { id:"G4", name:"Gesamt G4 – 10k",  next:10000,note:"System läuft. Review only." },
+      { id:"G5", name:"Gesamt G5 – 50k",  next:MISSION_TARGET, note:"Mission: Prozess, Schutz, Geduld." },
+    ];
 
-  // Gesamt: Motivierende Hauptstages (nur Anzeige)
-  const totalMilestones = [
-    { id:"G0", name:"Gesamt G0 – Start", next: 100, note:"Stabiler Boden. Disziplin schlägt Tempo." },
-    { id:"G1", name:"Gesamt G1 – Momentum", next: 300, note:"Prozess sitzt. Keine dummen Fehler." },
-    { id:"G2", name:"Gesamt G2 – Scale", next: 1000, note:"Ab hier: Konsistenz > Sensation." },
-    { id:"G3", name:"Gesamt G3 – Professional", next: 5000, note:"Kapital arbeitet, du schützt." },
-    { id:"G4", name:"Gesamt G4 – Machine", next: 10000, note:"System läuft. Review & Risk only." },
-    { id:"G5", name:"Gesamt G5 – Mission", next: MISSION_TARGET, note:"50K Mission: Prozess, Schutz, Geduld." },
-  ];
-
-  function getStageFor(account, cap){
-    const list = account === "aggro" ? stagesAggro : stagesSafe;
-    return list.find(s => cap>=s.min && cap<=s.max) || list[0];
-  }
-
-  function getTotalStage(totalCap){
-    for(const m of totalMilestones){
-      if(totalCap < m.next) return m;
-    }
-    return totalMilestones[totalMilestones.length-1];
-  }
-
-  function computePeakDD(entries){
-    if(entries.length < 2) return {peak: entries[0]?.capital ?? 0, ddPct:0, ddAbs:0};
-    let peak = entries[0].capital;
-    for(const e of entries) peak = Math.max(peak, e.capital);
-    const cur = entries[entries.length-1].capital;
-    const ddAbs = peak - cur;
-    const ddPct = peak>0 ? (ddAbs/peak)*100 : 0;
-    return {peak, ddPct, ddAbs};
-  }
-
-  function computeStreak(entries){
-    const days = [...new Set(entries.map(e=>String(e.ts||"").slice(0,10)))].sort();
-    if(days.length === 0) return 0;
-    let streak = 1;
-    for(let i=days.length-1; i>0; i--){
-      const a = new Date(days[i]);
-      const b = new Date(days[i-1]);
-      const diffDays = Math.round((a - b) / (1000*60*60*24));
-      if(diffDays === 1) streak++;
-      else break;
-    }
-    return streak;
-  }
-
-  // ==========================
-  // RENDER
-  // ==========================
-  function esc(s){
-    return String(s||"").replace(/[&<>"']/g, m=>({
-      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
-    }[m]));
-  }
-
-  function setInputsEnabled(enabled){
-    $("capitalInput").disabled = !enabled;
-    $("depositInput").disabled = !enabled;
-    $("noteInput").disabled = !enabled;
-    $("saveBtn").disabled = !enabled;
-  }
-
-  function render(){
-    const account = getActiveAccount();
-
-    // entries + current capital
-    let entries;
-    let cur;
-
-    if(account === "total"){
-      entries = mergedTotalEntries();
-      const a = lastCapital(loadEntries("aggro"), 0);
-      const s = lastCapital(loadEntries("safe"), 0);
-      cur = a + s;
-      setInputsEnabled(false);
-      $("capitalInput").value = ""; // read-only, nichts eintragen
-      $("depositInput").value = "";
-      $("noteInput").value = "";
-      $("stageHeader").textContent = "Hauptstages (Gesamt-Mission)";
-      $("backupHint").textContent = "Gesamt ist nur Anzeige. Export enthält beide Accounts.";
-      $("accColHead").style.display = "";
-    } else {
-      entries = loadEntries(account);
-      cur = entries.length ? Number(entries[entries.length-1].capital) : (account === "aggro" ? 39 : 100);
-      setInputsEnabled(true);
-      $("capitalInput").value = entries.length ? cur : ""; // leer lassen, wenn noch keine Einträge
-      $("stageHeader").textContent = "Stage-Regeln (Account-spezifisch)";
-      $("backupHint").textContent = "Export ist dein Backup (iCloud/Files).";
-      $("accColHead").style.display = "none";
+    function getStageFor(account, cap){
+      const list = account === "aggro" ? stagesAggro : stagesSafe;
+      return list.find(s => cap>=s.min && cap<=s.max) || list[0];
     }
 
-    // Header pill: stage + risk + next
-    $("capitalBig").textContent = fmt(cur);
-
-    let stageObj;
-    if(account === "total"){
-      stageObj = getTotalStage(cur);
-      $("stagePill").textContent = stageObj.id;
-      $("riskPill").textContent = "Risk: Gesamt";
-      $("nextTargetPill").textContent = `Next: ${fmt0(stageObj.next)}`;
-      $("dailyLossKpi").textContent = "—";
-    } else {
-      stageObj = getStageFor(account, cur);
-      $("stagePill").textContent = stageObj.id;
-      $("riskPill").textContent = stageObj.riskLabel;
-      $("nextTargetPill").textContent = `Next: ${fmt0(stageObj.next)}`;
-      $("dailyLossKpi").textContent = fmt0(stageObj.dailyMaxLoss);
+    function getTotalStage(totalCap){
+      for(const m of totalMilestones){
+        if(totalCap < m.next) return m;
+      }
+      return totalMilestones[totalMilestones.length-1];
     }
 
-    // KPIs
-    $("nextTargetKpi").textContent = fmt0(stageObj.next);
+    function computePeakDD(entries){
+      if(entries.length < 2) return {peak: entries[0]?.capital ?? 0, ddPct:0, ddAbs:0};
+      let peak = Number(entries[0].capital)||0;
+      for(const e of entries) peak = Math.max(peak, Number(e.capital)||0);
+      const cur = Number(entries[entries.length-1].capital)||0;
+      const ddAbs = peak - cur;
+      const ddPct = peak>0 ? (ddAbs/peak)*100 : 0;
+      return {peak, ddPct, ddAbs};
+    }
 
-    const toNext = Math.max(0, stageObj.next - cur);
-    $("toNextTiny").textContent = toNext>0 ? `noch ${fmt0(toNext)}` : "Ziel erreicht ✅";
+    function computeStreak(entries){
+      const days = [...new Set(entries.map(e=>String(e.ts||"").slice(0,10)))].sort();
+      if(days.length === 0) return 0;
+      let streak = 1;
+      for(let i=days.length-1; i>0; i--){
+        const a = new Date(days[i]);
+        const b = new Date(days[i-1]);
+        const diffDays = Math.round((a - b) / (1000*60*60*24));
+        if(diffDays === 1) streak++;
+        else break;
+      }
+      return streak;
+    }
 
-    const nextPct = clamp((cur / stageObj.next) * 100, 0, 100);
-    $("nextBar").style.width = nextPct + "%";
-    $("nextBarLabel").textContent = `${nextPct.toFixed(1)}% bis ${fmt0(stageObj.next)}`;
+    function esc(s){
+      return String(s||"").replace(/[&<>"']/g, m=>({
+        "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+      }[m]));
+    }
 
-    const missionPct = clamp((cur / MISSION_TARGET) * 100, 0, 100);
-    $("missionPctKpi").textContent = `${missionPct.toFixed(2)}%`;
-    $("missionBar").style.width = missionPct + "%";
-    $("missionBarLabel").textContent = `${missionPct.toFixed(3)}% von ${fmt0(MISSION_TARGET)}`;
-    $("missionLeftTiny").textContent = `rest ${fmt0(Math.max(0, MISSION_TARGET - cur))}`;
+    function setInputsEnabled(enabled){
+      $("capitalInput").disabled = !enabled;
+      $("depositInput").disabled = !enabled;
+      $("noteInput").disabled = !enabled;
+      $("saveBtn").disabled = !enabled;
+    }
 
-    // Stage rules panel
-    if(account === "total"){
-      $("stageTitle").textContent = stageObj.name;
-      $("stageRules").textContent =
-`MOTIVATION / HAUPTSTAGES (Gesamt)
-• Nächstes Ziel: ${fmt0(stageObj.next)}
-• Fokus: Disziplin + Prozess + Schutz
+    // ==========================
+    // PRO Tabs Core
+    // ==========================
+    const panels = [];
+    let activePanelId = null;
+
+    function registerPanel(panel){
+      // panel: { id, title, render(container, ctx) }
+      if(!panel || !panel.id) return;
+      if(panels.some(p=>p.id===panel.id)) return;
+      panels.push(panel);
+      if(!activePanelId) activePanelId = panel.id;
+      renderProTabs();
+      renderProPanel();
+    }
+
+    function renderProTabs(){
+      const tabs = $("proTabs");
+      tabs.innerHTML = "";
+      panels.forEach(p=>{
+        const b = document.createElement("div");
+        b.className = "tab" + (p.id===activePanelId ? " active" : "");
+        b.textContent = p.title || p.id;
+        b.onclick = ()=>{
+          activePanelId = p.id;
+          renderProTabs();
+          renderProPanel();
+        };
+        tabs.appendChild(b);
+      });
+    }
+
+    function coreCtx(){
+      const account = getActiveAccount();
+      const entriesA = loadEntries("aggro");
+      const entriesS = loadEntries("safe");
+      const entries = account==="total" ? mergedTotalEntries() : loadEntries(account);
+
+      const curA = lastCapital(entriesA, 0);
+      const curS = lastCapital(entriesS, 0);
+      const cur = account==="total" ? (curA+curS) : lastCapital(entries, account==="aggro" ? 39 : 0);
+
+      return {
+        account,
+        entriesAggro: entriesA,
+        entriesSafe: entriesS,
+        entries,
+        capitalAggro: curA,
+        capitalSafe: curS,
+        capital: cur,
+        fmt, fmt0, clamp,
+        MISSION_TARGET,
+        getStageFor,
+        getTotalStage,
+        computePeakDD,
+        computeStreak,
+        esc,
+        // storage helpers for plugins:
+        storage: {
+          getJSON(key, fallback){
+            try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); }
+            catch { return fallback; }
+          },
+          setJSON(key, obj){ localStorage.setItem(key, JSON.stringify(obj)); },
+          keyFor(prefix, acc){ return `${prefix}__${acc}`; }
+        }
+      };
+    }
+
+    function renderProPanel(){
+      const panel = panels.find(p=>p.id===activePanelId);
+      const root = $("proPanel");
+      root.innerHTML = "";
+      if(!panel){
+        root.innerHTML = `<div class="note">Keine PRO Module geladen.</div>`;
+        return;
+      }
+      try {
+        panel.render(root, coreCtx());
+      } catch(e){
+        root.innerHTML = `<div class="alert show warn"><b>⚠️ PRO Modul Fehler</b><br/>${esc(e.message||String(e))}</div>`;
+      }
+    }
+
+    // ==========================
+    // MAIN RENDER
+    // ==========================
+    function renderLog(entries){
+      const body = $("logBody");
+      body.innerHTML = "";
+      const rows = entries.slice().reverse().slice(0, 14);
+      for(const e of rows){
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${esc(e.ts)}</td>
+          <td class="right"><b>${fmt(e.capital)}</b></td>
+          <td class="right">${e.deposit ? fmt(e.deposit) : "—"}</td>
+          <td>${esc(e.note || "")}</td>
+        `;
+        body.appendChild(tr);
+      }
+    }
+
+    function renderChart(entries){
+      const canvas = $("chart");
+      const ctx = canvas.getContext("2d");
+
+      const dpr = window.devicePixelRatio || 1;
+      const cssW = canvas.clientWidth;
+      const cssH = canvas.clientHeight;
+      canvas.width = Math.floor(cssW * dpr);
+      canvas.height = Math.floor(cssH * dpr);
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+
+      ctx.clearRect(0,0,cssW,cssH);
+
+      const pad = {l:48, r:18, t:18, b:34};
+      const W = cssW, H = cssH;
+      const plotW = W - pad.l - pad.r;
+      const plotH = H - pad.t - pad.b;
+
+      ctx.fillStyle = "rgba(13,21,36,.35)";
+      ctx.fillRect(0,0,W,H);
+
+      if(entries.length < 2){
+        ctx.fillStyle = "rgba(229,231,235,.75)";
+        ctx.font = "14px Arial";
+        ctx.fillText("Noch keine Verlaufspunkte (mind. 2 Einträge).", pad.l, pad.t+20);
+        return;
+      }
+
+      const vals = entries.map(e=>Number(e.capital)||0);
+      let minV = Math.min(...vals);
+      let maxV = Math.max(...vals);
+      if(minV === maxV){ minV*=0.95; maxV*=1.05; }
+      const range = Math.max(1e-6, maxV-minV);
+
+      ctx.strokeStyle = "rgba(255,255,255,.10)";
+      ctx.lineWidth = 1;
+      const steps=5;
+      for(let i=0;i<=steps;i++){
+        const y = pad.t + (plotH/steps)*i;
+        ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(W-pad.r,y); ctx.stroke();
+        const v = maxV - (range/steps)*i;
+        ctx.fillStyle = "rgba(147,164,184,.85)";
+        ctx.font = "11px Arial";
+        ctx.fillText("$"+v.toFixed(0), 10, y+4);
+      }
+
+      const n = entries.length;
+      const pts = entries.map((e,i)=>{
+        const v = Number(e.capital)||0;
+        const x = pad.l + plotW*(i/(n-1));
+        const y = pad.t + plotH*(1-((v-minV)/range));
+        return {x,y,v};
+      });
+
+      const grad = ctx.createLinearGradient(pad.l,pad.t,W-pad.r,pad.t);
+      grad.addColorStop(0,"rgba(96,165,250,.95)");
+      grad.addColorStop(1,"rgba(34,197,94,.95)");
+
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = 2.6;
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x,pts[0].y);
+      for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x,pts[i].y);
+      ctx.stroke();
+
+      const last = pts[pts.length-1];
+      ctx.fillStyle = "rgba(17,27,46,.85)";
+      ctx.fillRect(last.x-48,last.y-26,96,22);
+      ctx.fillStyle = "rgba(229,231,235,.95)";
+      ctx.font = "12px Arial";
+      ctx.fillText(fmt(last.v), last.x-40, last.y-11);
+    }
+
+    function mainRender(){
+      const account = getActiveAccount();
+
+      let entries, cur;
+      const entriesA = loadEntries("aggro");
+      const entriesS = loadEntries("safe");
+      const curA = lastCapital(entriesA, 0);
+      const curS = lastCapital(entriesS, 0);
+
+      if(account === "total"){
+        entries = mergedTotalEntries();
+        cur = curA + curS;
+        setInputsEnabled(false);
+        $("capitalInput").value = "";
+        $("depositInput").value = "";
+        $("noteInput").value = "";
+        $("stageHeader").textContent = "Hauptstages (Gesamt)";
+        $("backupHint").textContent = "Gesamt ist read-only. Export enthält beide Accounts.";
+      } else {
+        entries = loadEntries(account);
+        cur = lastCapital(entries, account==="aggro" ? 39 : 0);
+        setInputsEnabled(true);
+        $("capitalInput").value = entries.length ? cur : "";
+        $("stageHeader").textContent = "Stage-Regeln (Account)";
+        $("backupHint").textContent = "Export ist dein Backup (iCloud/Files).";
+      }
+
+      $("capitalBig").textContent = fmt(cur);
+
+      let stageObj;
+      if(account === "total"){
+        stageObj = getTotalStage(cur);
+        $("stagePill").textContent = stageObj.id;
+        $("riskPill").textContent = "Risk: Gesamt";
+        $("nextTargetPill").textContent = `Next: ${fmt0(stageObj.next)}`;
+        $("dailyLossKpi").textContent = "—";
+      } else {
+        stageObj = getStageFor(account, cur);
+        $("stagePill").textContent = stageObj.id;
+        $("riskPill").textContent = stageObj.riskLabel;
+        $("nextTargetPill").textContent = `Next: ${fmt0(stageObj.next)}`;
+        $("dailyLossKpi").textContent = fmt0(stageObj.dailyMaxLoss);
+      }
+
+      $("nextTargetKpi").textContent = fmt0(stageObj.next);
+
+      const toNext = Math.max(0, stageObj.next - cur);
+      $("toNextTiny").textContent = toNext>0 ? `noch ${fmt0(toNext)}` : "Ziel erreicht ✅";
+
+      const nextPct = clamp((cur / stageObj.next) * 100, 0, 100);
+      $("nextBar").style.width = nextPct + "%";
+      $("nextBarLabel").textContent = `${nextPct.toFixed(1)}% bis ${fmt0(stageObj.next)}`;
+
+      const missionPct = clamp((cur / MISSION_TARGET) * 100, 0, 100);
+      $("missionPctKpi").textContent = `${missionPct.toFixed(2)}%`;
+      $("missionBar").style.width = missionPct + "%";
+      $("missionBarLabel").textContent = `${missionPct.toFixed(3)}% von ${fmt0(MISSION_TARGET)}`;
+      $("missionLeftTiny").textContent = `rest ${fmt0(Math.max(0, MISSION_TARGET - cur))}`;
+
+      // Stage box
+      if(account === "total"){
+        $("stageTitle").textContent = stageObj.name;
+        $("stageRules").textContent =
+`MOTIVATION / HAUPTSTAGE
+• Aggro: ${fmt(curA)}  • Safe: ${fmt(curS)}
+• Gesamt: ${fmt(cur)}
 
 ${stageObj.note}
 
 REGEL (immer)
-• Wenn ein Account KILL triggert → beide pausieren & Review`;
-      $("tag1").textContent = "Aggro + Safe";
-      $("tag1").className = "tag good";
-      $("tag2").textContent = "Gesamt = Anzeige";
-      $("tag2").className = "tag warn";
-      $("tag3").textContent = "Schutz > Tempo";
-      $("tag3").className = "tag bad";
-      $("triggerText").textContent = `${fmt0(stageObj.next)} → nächster Meilenstein`;
-      $("triggerNote").textContent = stageObj.note;
-    } else {
-      $("stageTitle").textContent = stageObj.name;
-      $("stageRules").textContent = stageObj.rules;
+• Wenn ein Account Kill/Warn triggert → beide pausieren & Review.`;
 
-      // tags
-      const tags = stageObj.tags;
-      $("tag1").textContent = tags[0].text; $("tag1").className = "tag " + tags[0].type;
-      $("tag2").textContent = tags[1].text; $("tag2").className = "tag " + tags[1].type;
-      $("tag3").textContent = tags[2].text; $("tag3").className = "tag " + tags[2].type;
+        $("tag1").textContent = "Aggro + Safe"; $("tag1").className = "tag good";
+        $("tag2").textContent = "Gesamt = read-only"; $("tag2").className = "tag warn";
+        $("tag3").textContent = "Schutz > Tempo"; $("tag3").className = "tag bad";
 
-      $("triggerText").textContent = `${fmt0(stageObj.next)} → next stage`;
-      $("triggerNote").textContent =
-        account === "aggro"
-          ? "Aggro: schnell, aber Regeln hart. Nach 2 Losses Pause."
-          : "Safe: Schutz zuerst. Kein Overtrade.";
-    }
-
-    // Alerts (Kill / Drawdown) — pro Account, bei Gesamt: worst-of
-    const alert = $("alertBox");
-    alert.className = "alert";
-    alert.innerHTML = "";
-    $("nextBar").className = "fill-ok";
-
-    function evaluateKillAndDD(ent, cap, stage){
-      const dd = computePeakDD(ent);
-      return { dd, cap, stage };
-    }
-
-    if(account === "total"){
-      const entA = loadEntries("aggro");
-      const entS = loadEntries("safe");
-      const capA = lastCapital(entA, 0);
-      const capS = lastCapital(entS, 0);
-
-      const stA = getStageFor("aggro", capA);
-      const stS = getStageFor("safe", capS);
-
-      const evA = evaluateKillAndDD(entA, capA, stA);
-      const evS = evaluateKillAndDD(entS, capS, stS);
-
-      const killA = (stA.id === "A0" && capA < 25) || (stA.id === "A1" && capA < 52);
-      const killS = (stS.id === "S0" && capS < 80) || (stS.id === "S1" && capS < 130);
-
-      const severeA = evA.dd.ddPct >= 25 && entA.length >= 4;
-      const severeS = evS.dd.ddPct >= 12 && entS.length >= 4; // Safe ist sensibler
-
-      if(killA || killS){
-        alert.className = "alert show bad";
-        alert.innerHTML = `<b>🛑 KILL SWITCH (Gesamt)</b><br/>Mindestens ein Account unter kritischem Level. Beide pausieren. Review.`;
-        $("statusPill").className = "pill bad";
-        $("statusPill").textContent = "Status: STOP";
-        $("nextBar").className = "fill-warn";
-      } else if(severeA || severeS){
-        alert.className = "alert show warn";
-        alert.innerHTML = `<b>⚠️ Drawdown Warnung (Gesamt)</b><br/>Mindestens ein Account mit starkem Drawdown. Risiko runter / Pause.`;
-        $("statusPill").className = "pill warn";
-        $("statusPill").textContent = "Status: Vorsicht";
-        $("nextBar").className = "fill-warn";
+        $("triggerText").textContent = `${fmt0(stageObj.next)} → nächster Meilenstein`;
+        $("triggerNote").textContent = stageObj.note;
       } else {
-        $("statusPill").className = "pill good";
-        $("statusPill").textContent = "Status: OK";
+        $("stageTitle").textContent = stageObj.name;
+        $("stageRules").textContent = stageObj.rules;
+
+        const tags = stageObj.tags;
+        $("tag1").textContent = tags[0].text; $("tag1").className = "tag " + tags[0].type;
+        $("tag2").textContent = tags[1].text; $("tag2").className = "tag " + tags[1].type;
+        $("tag3").textContent = tags[2].text; $("tag3").className = "tag " + tags[2].type;
+
+        $("triggerText").textContent = `${fmt0(stageObj.next)} → next stage`;
+        $("triggerNote").textContent = account==="aggro"
+          ? "Aggro: schnell, aber Regeln hart (nach 2 Losses Pause)."
+          : "Safe: Schutz zuerst (kein Overtrade).";
       }
 
-      // dd hint: show both
-      const ddA = evA.dd;
-      const ddS = evS.dd;
-      $("ddHint").textContent = `DD Aggro −${ddA.ddPct.toFixed(1)}% (Peak ${fmt(ddA.peak)}) • DD Safe −${ddS.ddPct.toFixed(1)}% (Peak ${fmt(ddS.peak)})`;
+      // Alerts
+      const alert = $("alertBox");
+      alert.className = "alert";
+      alert.innerHTML = "";
+      $("nextBar").className = "fill-ok";
 
-      // streak total = max of both (motivational)
-      const streak = Math.max(computeStreak(entA), computeStreak(entS));
-      $("streakPill").textContent = `Streak: ${streak}d`;
-    } else {
-      const dd = computePeakDD(entries);
-      $("ddHint").textContent = `Drawdown: −${dd.ddPct.toFixed(1)}% (Peak ${fmt(dd.peak)})`;
-
-      const kill =
-        (account === "aggro" && ((stageObj.id === "A0" && cur < 25) || (stageObj.id === "A1" && cur < 52))) ||
-        (account === "safe"  && ((stageObj.id === "S0" && cur < 80) || (stageObj.id === "S1" && cur < 130)));
-
-      const severe =
-        (account === "aggro" && dd.ddPct >= 25 && entries.length >= 4) ||
-        (account === "safe"  && dd.ddPct >= 12 && entries.length >= 4);
-
-      if(kill){
-        alert.className = "alert show bad";
-        alert.innerHTML = `<b>🛑 KILL SWITCH</b><br/>${account === "aggro" ? "Aggro" : "Safe"} unter kritischem Level. Bot pausieren. 24h Pause.`;
-        $("statusPill").className = "pill bad";
-        $("statusPill").textContent = "Status: STOP";
-        $("nextBar").className = "fill-warn";
-      } else if(severe){
-        alert.className = "alert show warn";
-        alert.innerHTML = `<b>⚠️ Drawdown Warnung</b><br/>Peak ${fmt(dd.peak)} → jetzt ${fmt(cur)} (−${dd.ddPct.toFixed(1)}%). Risiko reduzieren / pausieren.`;
-        $("statusPill").className = "pill warn";
-        $("statusPill").textContent = "Status: Vorsicht";
-        $("nextBar").className = "fill-warn";
-      } else {
-        $("statusPill").className = "pill good";
-        $("statusPill").textContent = "Status: OK";
+      function setStatus(cls, txt){
+        $("statusPill").className = "pill " + cls;
+        $("statusPill").textContent = txt;
       }
 
-      const streak = computeStreak(entries);
-      $("streakPill").textContent = `Streak: ${streak}d`;
+      if(account === "total"){
+        // worst-of view
+        const stA = getStageFor("aggro", curA);
+        const stS = getStageFor("safe", curS);
+        const ddA = computePeakDD(entriesA);
+        const ddS = computePeakDD(entriesS);
+
+        const killA = (stA.id==="A0" && curA<25) || (stA.id==="A1" && curA<52);
+        const killS = (stS.id==="S0" && curS<80) || (stS.id==="S1" && curS<130);
+
+        const severeA = ddA.ddPct >= 25 && entriesA.length >= 4;
+        const severeS = ddS.ddPct >= 12 && entriesS.length >= 4;
+
+        if(killA || killS){
+          alert.className = "alert show bad";
+          alert.innerHTML = `<b>🛑 KILL SWITCH</b><br/>Mindestens ein Account unter kritischem Level. Beide pausieren.`;
+          setStatus("bad","Status: STOP");
+          $("nextBar").className = "fill-warn";
+        } else if(severeA || severeS){
+          alert.className = "alert show warn";
+          alert.innerHTML = `<b>⚠️ Drawdown Warnung</b><br/>Mindestens ein Account hat starken Drawdown. Risiko runter / Pause.`;
+          setStatus("warn","Status: Vorsicht");
+          $("nextBar").className = "fill-warn";
+        } else {
+          setStatus("good","Status: OK");
+        }
+
+        $("ddHint").textContent = `DD Aggro −${ddA.ddPct.toFixed(1)}% (Peak ${fmt(ddA.peak)}) • DD Safe −${ddS.ddPct.toFixed(1)}% (Peak ${fmt(ddS.peak)})`;
+        const streak = Math.max(computeStreak(entriesA), computeStreak(entriesS));
+        $("streakPill").textContent = `Streak: ${streak}d`;
+      } else {
+        const dd = computePeakDD(entries);
+        $("ddHint").textContent = `Drawdown: −${dd.ddPct.toFixed(1)}% (Peak ${fmt(dd.peak)})`;
+        const streak = computeStreak(entries);
+        $("streakPill").textContent = `Streak: ${streak}d`;
+
+        const kill =
+          (account==="aggro" && ((stageObj.id==="A0" && cur<25) || (stageObj.id==="A1" && cur<52))) ||
+          (account==="safe"  && ((stageObj.id==="S0" && cur<80) || (stageObj.id==="S1" && cur<130)));
+
+        const severe =
+          (account==="aggro" && dd.ddPct >= 25 && entries.length >= 4) ||
+          (account==="safe"  && dd.ddPct >= 12 && entries.length >= 4);
+
+        if(kill){
+          alert.className = "alert show bad";
+          alert.innerHTML = `<b>🛑 KILL SWITCH</b><br/>${account==="aggro"?"Aggro":"Safe"} unter kritischem Level. 24h Pause.`;
+          setStatus("bad","Status: STOP");
+          $("nextBar").className = "fill-warn";
+        } else if(severe){
+          alert.className = "alert show warn";
+          alert.innerHTML = `<b>⚠️ Drawdown Warnung</b><br/>Peak ${fmt(dd.peak)} → jetzt ${fmt(cur)} (−${dd.ddPct.toFixed(1)}%). Risiko reduzieren.`;
+          setStatus("warn","Status: Vorsicht");
+          $("nextBar").className = "fill-warn";
+        } else {
+          setStatus("good","Status: OK");
+        }
+      }
+
+      // Log + chart
+      renderLog(account==="total" ? mergedTotalEntries() : entries);
+      renderChart(account==="total" ? mergedTotalEntries() : entries);
+
+      $("chartHint").textContent =
+        account==="total"
+          ? `Gesamtansicht • Aggro+Safe kombiniert`
+          : `${account==="aggro" ? "Aggro" : "Safe"} • Letzte ${Math.min(entries.length, MAX_ENTRIES)} Einträge`;
+
+      // PRO panel refresh
+      renderProPanel();
+      window.dispatchEvent(new CustomEvent("ccc:render", { detail: { account }}));
     }
 
-    // Right side: log + chart
-    renderLog(account, entries);
-    renderChart(entries);
+    // ==========================
+    // ACTIONS
+    // ==========================
+    function saveEntry(){
+      const account = getActiveAccount();
+      if(account === "total"){
+        alert("Gesamt ist read-only. Bitte Aggro oder Safe wählen.");
+        return;
+      }
+      const cap = Number($("capitalInput").value);
+      if(!isFinite(cap) || cap <= 0){ alert("Bitte gültiges Kapital eingeben."); return; }
 
-    // extras hint
-    $("chartHint").textContent =
-      account === "total"
-        ? `Gesamtansicht • Aggro+Safe kombiniert • lokal gespeichert`
-        : `${account === "aggro" ? "Aggro" : "Safe-Build"} • Letzte ${Math.min(entries.length, MAX_ENTRIES)} Einträge • lokal gespeichert`;
-  }
+      const dep = Number($("depositInput").value || 0);
+      const note = ($("noteInput").value || "").trim();
 
-  function renderLog(account, entries){
-    const body = $("logBody");
-    body.innerHTML = "";
+      const entries = loadEntries(account);
+      entries.push({ ts: nowStamp(), capital: cap, deposit: isFinite(dep)?dep:0, note });
+      saveEntries(account, entries);
 
-    const rows = entries.slice().reverse().slice(0, 14);
-    for(const e of rows){
-      const tr = document.createElement("tr");
-      const accTd = account === "total" ? `<td>${esc(e._acc || "")}</td>` : "";
-      tr.innerHTML = `
-        <td>${esc(e.ts)}</td>
-        <td class="right"><b>${fmt(e.capital)}</b></td>
-        <td class="right">${e.deposit ? fmt(e.deposit) : "—"}</td>
-        <td>${esc(e.note || "")}</td>
-        ${accTd}
-      `;
-      body.appendChild(tr);
-    }
-  }
-
-  function renderChart(entries){
-    const canvas = $("chart");
-    const ctx = canvas.getContext("2d");
-
-    // HiDPI
-    const dpr = window.devicePixelRatio || 1;
-    const cssW = canvas.clientWidth;
-    const cssH = canvas.clientHeight;
-    canvas.width = Math.floor(cssW * dpr);
-    canvas.height = Math.floor(cssH * dpr);
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-
-    ctx.clearRect(0,0,cssW,cssH);
-
-    const pad = {l:48, r:18, t:18, b:34};
-    const W = cssW, H = cssH;
-    const plotW = W - pad.l - pad.r;
-    const plotH = H - pad.t - pad.b;
-
-    // bg
-    ctx.fillStyle = "rgba(13,21,36,.35)";
-    ctx.fillRect(0,0,W,H);
-
-    if(entries.length < 2){
-      ctx.fillStyle = "rgba(229,231,235,.75)";
-      ctx.font = "14px Arial";
-      ctx.fillText("Noch keine Verlaufspunkte (mind. 2 Einträge).", pad.l, pad.t+20);
-      return;
+      $("depositInput").value = "";
+      $("noteInput").value = "";
+      mainRender();
     }
 
-    const vals = entries.map(e=>Number(e.capital)||0);
-    let minV = Math.min(...vals);
-    let maxV = Math.max(...vals);
-    if(minV === maxV){ minV*=0.95; maxV*=1.05; }
-    const range = Math.max(1e-6, maxV-minV);
+    function exportJSON(){
+      const account = getActiveAccount();
+      const payload =
+        account === "total"
+          ? { aggro: loadEntries("aggro"), safe: loadEntries("safe") }
+          : { [account]: loadEntries(account) };
 
-    // grid
-    ctx.strokeStyle = "rgba(255,255,255,.10)";
-    ctx.lineWidth = 1;
-    const steps=5;
-    for(let i=0;i<=steps;i++){
-      const y = pad.t + (plotH/steps)*i;
-      ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(W-pad.r,y); ctx.stroke();
-      const v = maxV - (range/steps)*i;
-      ctx.fillStyle = "rgba(147,164,184,.85)";
-      ctx.font = "11px Arial";
-      ctx.fillText("$"+v.toFixed(0), 10, y+4);
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {type:"application/json"});
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = account === "total" ? "ccc-backup-all.json" : `ccc-backup-${account}.json`;
+      a.click();
+      URL.revokeObjectURL(a.href);
     }
 
-    // points
-    const n = entries.length;
-    const pts = entries.map((e,i)=>{
-      const v = Number(e.capital)||0;
-      const x = pad.l + plotW*(i/(n-1));
-      const y = pad.t + plotH*(1-((v-minV)/range));
-      return {x,y,v};
-    });
-
-    const grad = ctx.createLinearGradient(pad.l,pad.t,W-pad.r,pad.t);
-    grad.addColorStop(0,"rgba(96,165,250,.95)");
-    grad.addColorStop(1,"rgba(34,197,94,.95)");
-
-    ctx.strokeStyle = grad;
-    ctx.lineWidth = 2.6;
-    ctx.beginPath();
-    ctx.moveTo(pts[0].x,pts[0].y);
-    for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x,pts[i].y);
-    ctx.stroke();
-
-    // last label
-    const last = pts[pts.length-1];
-    ctx.fillStyle = "rgba(17,27,46,.85)";
-    ctx.fillRect(last.x-48,last.y-26,96,22);
-    ctx.fillStyle = "rgba(229,231,235,.95)";
-    ctx.font = "12px Arial";
-    ctx.fillText(fmt(last.v), last.x-40, last.y-11);
-  }
-
-  // ==========================
-  // ACTIONS
-  // ==========================
-  function saveEntry(){
-    const account = getActiveAccount();
-    if(account === "total"){
-      alert("Gesamt ist nur Anzeige. Bitte Aggro oder Safe-Build wählen.");
-      return;
-    }
-    const cap = Number($("capitalInput").value);
-    if(!isFinite(cap) || cap <= 0){ alert("Bitte gültiges Kapital eingeben."); return; }
-
-    const dep = Number($("depositInput").value || 0);
-    const note = ($("noteInput").value || "").trim();
-
-    const entries = loadEntries(account);
-    entries.push({ ts: nowStamp(), capital: cap, deposit: isFinite(dep)?dep:0, note });
-    saveEntries(account, entries);
-
-    $("depositInput").value = "";
-    $("noteInput").value = "";
-    render();
-  }
-
-  // Export: je nach Account
-  // - Aggro/Safe: export nur dieses Konto
-  // - Gesamt: export beide Konten zusammen
-  function exportJSON(){
-    const account = getActiveAccount();
-    const payload =
-      account === "total"
-        ? { aggro: loadEntries("aggro"), safe: loadEntries("safe") }
-        : { [account]: loadEntries(account) };
-
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {type:"application/json"});
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = account === "total" ? "ccc-backup-all.json" : `ccc-backup-${account}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }
-
-  // Import:
-  // - wenn JSON {aggro:[...], safe:[...]} -> import beide
-  // - wenn JSON {aggro:[...]} -> import aggro
-  // - wenn JSON {safe:[...]}  -> import safe
-  function importJSON(){
-    const inp = document.createElement("input");
-    inp.type = "file";
-    inp.accept = "application/json";
-    inp.onchange = ()=>{
-      const f = inp.files && inp.files[0];
-      if(!f) return;
-      const r = new FileReader();
-      r.onload = ()=>{
-        try{
-          const data = JSON.parse(r.result);
-
-          const hasAggro = data && Array.isArray(data.aggro);
-          const hasSafe  = data && Array.isArray(data.safe);
-
-          if(hasAggro) saveEntries("aggro", data.aggro);
-          if(hasSafe)  saveEntries("safe", data.safe);
-
-          // single-account import
-          if(!hasAggro && !hasSafe){
-            if(Array.isArray(data.aggro)) saveEntries("aggro", data.aggro);
-            else if(Array.isArray(data.safe)) saveEntries("safe", data.safe);
-            else {
-              alert("Import-JSON nicht erkannt. Erwartet: {aggro:[...], safe:[...]} oder {aggro:[...]} oder {safe:[...]}");
+    function importJSON(){
+      const inp = document.createElement("input");
+      inp.type = "file";
+      inp.accept = "application/json";
+      inp.onchange = ()=>{
+        const f = inp.files && inp.files[0];
+        if(!f) return;
+        const r = new FileReader();
+        r.onload = ()=>{
+          try{
+            const data = JSON.parse(r.result);
+            if(data && Array.isArray(data.aggro)) saveEntries("aggro", data.aggro);
+            if(data && Array.isArray(data.safe))  saveEntries("safe", data.safe);
+            if(!(data && (Array.isArray(data.aggro) || Array.isArray(data.safe)))){
+              alert("Import-JSON nicht erkannt. Erwartet: {aggro:[...], safe:[...]}");
               return;
             }
+            mainRender();
+          }catch(e){
+            alert("Import fehlgeschlagen.");
           }
-
-          render();
-        }catch(e){
-          alert("Import fehlgeschlagen.");
-        }
+        };
+        r.readAsText(f);
       };
-      r.readAsText(f);
-    };
-    inp.click();
-  }
-
-  function resetAll(){
-    const account = getActiveAccount();
-    if(account === "total"){
-      if(!confirm("Gesamt resetten = Aggro + Safe löschen. Wirklich?")) return;
-      localStorage.removeItem(storageKey("aggro"));
-      localStorage.removeItem(storageKey("safe"));
-      render();
-      return;
+      inp.click();
     }
-    if(!confirm(`Wirklich ${account === "aggro" ? "Aggro" : "Safe-Build"} resetten?`)) return;
-    localStorage.removeItem(storageKey(account));
-    render();
-  }
 
-  // ==========================
-  // PWA: Service Worker
-  // ==========================
-  async function setupPWA(){
-    const pill = $("pwaPill");
-    const isSecure = location.protocol === "https:" || location.hostname === "localhost";
-    if(!isSecure){
-      pill.className = "pill warn";
-      pill.textContent = "PWA: local file (SW off)";
-      return;
-    }
-    if("serviceWorker" in navigator){
-      try{
-        await navigator.serviceWorker.register("sw.js");
-        pill.className = "pill good";
-        pill.textContent = "PWA: cached ✅";
-      }catch(e){
-        pill.className = "pill warn";
-        pill.textContent = "PWA: SW failed";
+    function resetAll(){
+      const account = getActiveAccount();
+      if(account === "total"){
+        if(!confirm("Gesamt reset = Aggro + Safe löschen. Wirklich?")) return;
+        localStorage.removeItem(storageKey("aggro"));
+        localStorage.removeItem(storageKey("safe"));
+        mainRender();
+        return;
       }
-    }else{
-      pill.className = "pill warn";
-      pill.textContent = "PWA: no SW";
+      if(!confirm(`Wirklich ${account==="aggro" ? "Aggro" : "Safe"} resetten?`)) return;
+      localStorage.removeItem(storageKey(account));
+      mainRender();
     }
-  }
 
-  // ==========================
-  // EVENTS + BOOT
-  // ==========================
-  $("saveBtn").addEventListener("click", saveEntry);
-  $("exportBtn").addEventListener("click", exportJSON);
-  $("importBtn").addEventListener("click", importJSON);
-  $("resetBtn").addEventListener("click", resetAll);
+    async function setupPWA(){
+      const pill = $("pwaPill");
+      const isSecure = location.protocol === "https:" || location.hostname === "localhost";
+      if(!isSecure){
+        pill.className = "pill warn";
+        pill.textContent = "PWA: local file (SW off)";
+        return;
+      }
+      if("serviceWorker" in navigator){
+        try{
+          await navigator.serviceWorker.register("sw.js");
+          pill.className = "pill good";
+          pill.textContent = "PWA: cached ✅";
+        }catch(e){
+          pill.className = "pill warn";
+          pill.textContent = "PWA: SW failed";
+        }
+      }else{
+        pill.className = "pill warn";
+        pill.textContent = "PWA: no SW";
+      }
+    }
 
-  $("accountSelect").addEventListener("change", (e)=>{
-    setActiveAccount(e.target.value);
-    render();
-  });
+    // ==========================
+    // Public API for plugins
+    // ==========================
+    window.CCC = {
+      version: "pro-v1",
+      registerPanel,
+      getActiveAccount,
+      setActiveAccount,
+      loadEntries,
+      saveEntries,
+      mergedTotalEntries,
+      nowStamp,
+      fmt, fmt0, clamp,
+      getStageFor,
+      getTotalStage,
+      computePeakDD,
+      computeStreak,
+      MISSION_TARGET,
+      storageKey: storageKey,
+      coreCtx
+    };
 
-  // initialize select + render
-  $("accountSelect").value = getActiveAccount();
-  render();
-  setupPWA();
+    // Events
+    $("saveBtn").addEventListener("click", saveEntry);
+    $("exportBtn").addEventListener("click", exportJSON);
+    $("importBtn").addEventListener("click", importJSON);
+    $("resetBtn").addEventListener("click", resetAll);
+
+    $("accountSelect").addEventListener("change", (e)=>{
+      setActiveAccount(e.target.value);
+      mainRender();
+    });
+
+    // Boot
+    $("accountSelect").value = getActiveAccount();
+    setupPWA();
+    mainRender();
+
+    // allow plugins to request rerender
+    window.CCC.requestRender = mainRender;
+    window.addEventListener("ccc:account", mainRender);
+    window.addEventListener("resize", ()=>{ mainRender(); });
+  })();
 </script>
 
-<!-- CCC Plugin Loader (multi) -->
+<!-- PLUGIN LOADER -->
 <script>
   (function(){
     var plugins = [
       "./plugins/safearea.js",
-      // "./plugins/rules.js",       // ⚠️ deaktiviert, weil Rules jetzt im Main-Code pro Account laufen
-      // "./plugins/two-accounts.js" // ⚠️ deaktiviert, weil Accounts jetzt im Main-Code sind
-      // später: "./plugins/weekly.js", "./plugins/quests.js"
+      "./plugins/risk-engine.js",
+      "./plugins/trades-journal.js",
+      "./plugins/exposure.js",
+      "./plugins/analytics.js",
+      "./plugins/discipline.js"
     ];
 
     function load(src){
       var s = document.createElement("script");
-      s.src = src + "?v=" + Date.now();
+      s.src = src + "?v=" + Date.now(); // Cache bust
       s.defer = true;
       s.onerror = function(){ console.log("Plugin nicht gefunden:", src); };
       document.head.appendChild(s);
